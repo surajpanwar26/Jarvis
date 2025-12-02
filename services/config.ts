@@ -3,27 +3,32 @@
 // We prioritize this for local builds.
 
 const getEnv = (key: string): string | undefined => {
+  let val: string | undefined = undefined;
+
   // 1. Try Vite standard (import.meta.env)
-  // Note: We use a try-catch because import.meta might not exist in some jest/test environments
   try {
     // @ts-ignore
     if (import.meta.env && import.meta.env[key]) {
       // @ts-ignore
-      return import.meta.env[key].trim();
+      val = import.meta.env[key];
     }
     // @ts-ignore
-    if (import.meta.env && import.meta.env[`VITE_${key}`]) {
+    else if (import.meta.env && import.meta.env[`VITE_${key}`]) {
       // @ts-ignore
-      return import.meta.env[`VITE_${key}`].trim();
+      val = import.meta.env[`VITE_${key}`];
     }
   } catch (e) {
     // ignore
   }
 
   // 2. Try Node/Process standard (Fallback)
-  if (typeof process !== 'undefined' && process.env) {
-    const val = process.env[key] || process.env[`REACT_APP_${key}`];
-    if (val) return val.trim();
+  if (!val && typeof process !== 'undefined' && process.env) {
+    val = process.env[key] || process.env[`REACT_APP_${key}`];
+  }
+
+  // Clean value (remove quotes if user added them in .env text file)
+  if (val) {
+    return val.replace(/["']/g, "").trim();
   }
 
   return undefined;

@@ -118,7 +118,6 @@ class GroqProvider implements LLMProvider {
   }
 
   async *generateStream(params: GenerationParams): AsyncGenerator<string, void, unknown> {
-    // Basic implementation for compatibility, though we prefer Gemini for streaming reports
     const text = await this.generate(params);
     yield text;
   }
@@ -127,14 +126,17 @@ class GroqProvider implements LLMProvider {
 // --- 3. Google Gemini Implementation (PRIMARY) ---
 class GeminiProvider implements LLMProvider {
   private ai: GoogleGenAI;
+  private apiKey: string;
   private model = "gemini-2.5-flash";
 
   constructor(apiKey: string) {
+    this.apiKey = apiKey;
     this.ai = new GoogleGenAI({ apiKey });
   }
 
   async generate(params: GenerationParams): Promise<string> {
     try {
+      // 1. Try SDK Method
       const response = await this.ai.models.generateContent({
         model: this.model,
         contents: params.prompt,
@@ -146,7 +148,44 @@ class GeminiProvider implements LLMProvider {
       });
       return response.text || "";
     } catch (e: any) {
-      console.error("Gemini Error:", e);
+      console.warn("Gemini SDK Failed, attempting REST API Fallback...", e.message);
+      
+      // 2. Fallback: Direct REST API (Bypasses SDK fetch issues locally)
+      if (e.message && (e.message.includes("fetch") || e.message.includes("network"))) {
+         try {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.apiKey}`;
+            
+            const rawBody: any = {
+              contents: [{ parts: [{ text: params.prompt }] }],
+              generationConfig: {
+                 responseMimeType: params.jsonMode ? "application/json" : "text/plain"
+              }
+            };
+
+            if (params.systemInstruction) {
+              rawBody.systemInstruction = { parts: [{ text: params.systemInstruction }] };
+            }
+
+            const fallbackResp = await fetch(url, {
+               method: 'POST',
+               headers: { 'Content-Type': 'application/json' },
+               body: JSON.stringify(rawBody)
+            });
+
+            if (!fallbackResp.ok) {
+               const errText = await fallbackResp.text();
+               throw new Error(`REST Fallback Failed: ${fallbackResp.status} - ${errText}`);
+            }
+
+            const data = await fallbackResp.json();
+            return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
+         } catch (fallbackError: any) {
+            console.error("Critical: Both SDK and REST Fallback failed.");
+            throw new Error(`Gemini Generation Failed: ${fallbackError.message}`);
+         }
+      }
+      
       throw e;
     }
   }
@@ -176,16 +215,19 @@ class GeminiProvider implements LLMProvider {
 export const getLLMProvider = (): LLMProvider => {
   // 1. Google Gemini (Primary for everything)
   if (hasKey(config.googleApiKey)) {
+    console.log("Using Provider: Google Gemini");
     return new GeminiProvider(config.googleApiKey!);
   }
   
   // 2. Groq (Secondary)
   if (hasKey(config.groqApiKey)) {
+    console.log("Using Provider: Groq");
     return new GroqProvider(config.groqApiKey!);
   }
 
   // 3. Hugging Face (Fallback)
   if (hasKey(config.huggingFaceApiKey)) {
+    console.log("Using Provider: HuggingFace");
     return new HuggingFaceProvider(config.huggingFaceApiKey!);
   }
   
@@ -194,5 +236,5 @@ export const getLLMProvider = (): LLMProvider => {
 
 // --- Report Factory (Strict Priority: Gemini -> HF) ---
 export const getReportLLM = (): LLMProvider => {
-  return getLLMProvider(); // Reuse the same priority logic for simplicity and single-key compliance
+  return getLLMProvider(); 
 };

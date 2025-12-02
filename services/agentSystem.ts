@@ -1,3 +1,4 @@
+
 import { AgentEvent, AgentState, Source } from "../types";
 import { getLLMProvider, getReportLLM } from "./llmProvider";
 import { performSearch } from "./searchProvider";
@@ -146,8 +147,10 @@ class WriterAgent extends BaseAgent {
       return { ...state, report: fullReport };
     } catch (e: any) {
       console.error(e);
-      this.emit({ type: 'error', message: `Drafting failed: ${e.message}`, timestamp: new Date() });
-      return { ...state, report: `**Report Generation Failed**\n\nError: ${e.message}\n\nPlease check API keys and try again.` };
+      // Detailed error message in UI
+      const errDetail = e.message || JSON.stringify(e);
+      this.emit({ type: 'error', message: `Drafting failed: ${errDetail}`, timestamp: new Date() });
+      return { ...state, report: `**Report Generation Failed**\n\nError: ${errDetail}\n\nPlease check API keys and try again.` };
     }
   }
 }
