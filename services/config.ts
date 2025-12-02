@@ -3,10 +3,11 @@
 // We use a safe access pattern here.
 
 const getEnv = (key: string): string | undefined => {
+  let val: string | undefined;
   if (typeof process !== 'undefined' && process.env) {
-    return process.env[key] || process.env[`REACT_APP_${key}`];
+    val = process.env[key] || process.env[`REACT_APP_${key}`];
   }
-  return undefined;
+  return val ? val.trim() : undefined;
 };
 
 export const config = {

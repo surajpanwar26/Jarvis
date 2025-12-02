@@ -1,18 +1,18 @@
 import { AgentEvent, AgentState, Source } from "../types";
-import { getLLMProvider } from "./llmProvider";
+import { getLLMProvider, getReportLLM } from "./llmProvider";
 import { performSearch } from "./searchProvider";
 
 // --- Configuration ---
-const MAX_UNIQUE_SOURCES = 5;
-const MAX_UNIQUE_IMAGES = 5;
+const MAX_UNIQUE_SOURCES = 10; // Increased to gather more data
+const MAX_UNIQUE_IMAGES = 10;
 
 /**
  * 7-Agent Architecture:
  * 1. ChiefEditor (Orchestrator)
  * 2. Editor (Planner)
  * 3. Researcher (Scraper)
- * 4. Reviewer (Validator - Simplified)
- * 5. Reviser (Replanner - Simplified)
+ * 4. Reviewer (Validator)
+ * 5. Reviser (Replanner)
  * 6. Writer (Synthesizer)
  * 7. Publisher (Formatter)
  */
@@ -28,10 +28,10 @@ class EditorAgent extends BaseAgent {
     const llm = getLLMProvider();
     this.emit({ type: 'agent_action', agentName: 'Editor', message: 'Analyzing request and outlining research strategy...', timestamp: new Date() });
     
-    const count = state.isDeep ? 4 : 2;
+    const count = state.isDeep ? 5 : 3; // Increased query count for more coverage
     const prompt = `Topic: "${state.topic}"
     Role: You are the Research Editor. Plan the outline.
-    Task: Generate ${count} specific, targeted search queries to cover this topic.
+    Task: Generate ${count} specific, targeted search queries to cover this topic comprehensively.
     Format: Return ONLY a raw JSON array of strings.`;
 
     try {
@@ -56,7 +56,6 @@ class ResearcherAgent extends BaseAgent {
   async execute(state: AgentState): Promise<AgentState> {
     const newContext = [...state.context];
     
-    // Use Maps to ensure uniqueness by URI/URL while preserving insertion order (priority)
     const uniqueSources = new Map<string, Source>();
     state.sources.forEach(s => uniqueSources.set(s.uri, s));
     
@@ -65,17 +64,12 @@ class ResearcherAgent extends BaseAgent {
     this.emit({ type: 'agent_action', agentName: 'Researcher', message: 'Deploying autonomous scrapers...', timestamp: new Date() });
 
     for (const query of state.plan) {
-      // Break early if we hit limits to save API calls, 
-      // OR continue to get text context but ignore new images/sources if full.
-      // Here we continue for context but stop collecting assets.
-      
       this.emit({ type: 'search', agentName: 'Researcher', message: `Gathering intelligence: "${query}"`, timestamp: new Date() });
       
       try {
         const results = await performSearch(query);
         newContext.push(`### Data for "${query}":\n${results.text}`);
 
-        // Process Sources
         for (const s of results.sources) {
           if (uniqueSources.size >= MAX_UNIQUE_SOURCES) break;
           if (!uniqueSources.has(s.uri)) {
@@ -84,7 +78,6 @@ class ResearcherAgent extends BaseAgent {
           }
         }
 
-        // Process Images
         for (const img of results.images) {
           if (uniqueImages.size >= MAX_UNIQUE_IMAGES) break;
           if (!uniqueImages.has(img)) {
@@ -125,7 +118,9 @@ class ReviewerAgent extends BaseAgent {
 // --- 4. WRITER AGENT ---
 class WriterAgent extends BaseAgent {
   async execute(state: AgentState): Promise<AgentState> {
-    const llm = getLLMProvider();
+    // Uses getReportLLM to strictly prioritize Gemini -> Groq -> HF
+    const llm = getReportLLM();
+    
     this.emit({ type: 'agent_action', agentName: 'Writer', message: 'Drafting final report...', timestamp: new Date() });
 
     const role = state.isDeep ? "Chief Technical Writer" : "Briefing Specialist";
@@ -134,6 +129,7 @@ class WriterAgent extends BaseAgent {
       const stream = llm.generateStream({
         prompt: `Topic: ${state.topic}\n\nContext Data:\n${state.context.join('\n\n')}\n\nTask: Compile a structured report. Use Markdown.`,
         systemInstruction: `You are the ${role}. Structure the report professionally.`,
+        thinkingBudget: state.isDeep ? 1024 : undefined 
       });
 
       let fullReport = "";
@@ -144,7 +140,8 @@ class WriterAgent extends BaseAgent {
 
       return { ...state, report: fullReport };
     } catch (e: any) {
-      return { ...state, report: "Drafting failed." };
+      console.error(e);
+      return { ...state, report: "Drafting failed. " + e.message };
     }
   }
 }
