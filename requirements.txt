@@ -1,7 +1,7 @@
-
 fastapi
 uvicorn
 python-multipart
+websockets
 langchain
 langchain-community
 langchain-core
@@ -13,3 +13,7 @@ tavily-python
 python-dotenv
 pydantic
 typing-extensions
+chromadb
+pypdf
+sentence-transformers
+tiktoken

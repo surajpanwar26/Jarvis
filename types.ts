@@ -21,7 +21,7 @@ export enum ResearchStatus {
 
 export type PageView = 'HOME' | 'QUICK_RESULT' | 'DEEP_RESULT' | 'DOC_ANALYSIS';
 
-export type AgentEventType = 'plan' | 'search' | 'image' | 'source' | 'log' | 'error' | 'complete' | 'thought' | 'agent_action' | 'report_chunk';
+export type AgentEventType = 'plan' | 'search' | 'image' | 'source' | 'log' | 'error' | 'complete' | 'thought' | 'agent_action' | 'report_chunk' | 'info';
 
 export interface AgentEvent {
   type: AgentEventType;

@@ -1,21 +1,11 @@
 import { AgentEvent, AgentState, Source } from "../types";
 import { getLLMProvider, getReportLLM } from "./llmProvider";
 import { performSearch } from "./searchProvider";
+import { api } from "./apiClient";
 
 // --- Configuration ---
-const MAX_UNIQUE_SOURCES = 10; // Increased to gather more data
+const MAX_UNIQUE_SOURCES = 10;
 const MAX_UNIQUE_IMAGES = 10;
-
-/**
- * 7-Agent Architecture:
- * 1. ChiefEditor (Orchestrator)
- * 2. Editor (Planner)
- * 3. Researcher (Scraper)
- * 4. Reviewer (Validator)
- * 5. Reviser (Replanner)
- * 6. Writer (Synthesizer)
- * 7. Publisher (Formatter)
- */
 
 abstract class BaseAgent {
   constructor(protected emit: (event: AgentEvent) => void) {}
@@ -28,7 +18,8 @@ class EditorAgent extends BaseAgent {
     const llm = getLLMProvider();
     this.emit({ type: 'agent_action', agentName: 'Editor', message: 'Analyzing request and outlining research strategy...', timestamp: new Date() });
     
-    const count = state.isDeep ? 5 : 3; // Increased query count for more coverage
+    const count = state.isDeep ? 5 : 3;
+    // Fix: Corrected Template Literal syntax below
     const prompt = `Topic: "${state.topic}"
     Role: You are the Research Editor. Plan the outline.
     Task: Generate ${count} specific, targeted search queries to cover this topic comprehensively.
@@ -118,7 +109,6 @@ class ReviewerAgent extends BaseAgent {
 // --- 4. WRITER AGENT ---
 class WriterAgent extends BaseAgent {
   async execute(state: AgentState): Promise<AgentState> {
-    // Uses getReportLLM to strictly prioritize Gemini -> Groq -> HF
     const llm = getReportLLM();
     
     this.emit({ type: 'agent_action', agentName: 'Writer', message: 'Drafting final report...', timestamp: new Date() });
@@ -169,6 +159,31 @@ export class ResearchWorkflow {
   }
 
   public async start(topic: string, isDeep: boolean) {
+    // 1. Check if Backend is available
+    const useBackend = await api.health();
+    
+    if (useBackend) {
+       this.emit({ type: 'info', message: 'Connected to Neural Backend (Python/LangGraph)', timestamp: new Date() });
+       try {
+         const result = await api.startResearch(topic, isDeep);
+         this.emit({ 
+            type: 'complete', 
+            message: 'Research Completed by Backend', 
+            data: result, 
+            timestamp: new Date() 
+         });
+       } catch (e: any) {
+         this.emit({ type: 'error', message: `Backend Error: ${e.message}`, timestamp: new Date() });
+         // Fallback to frontend agents if backend fails
+         this.runFrontendAgents(topic, isDeep);
+       }
+    } else {
+       this.emit({ type: 'info', message: 'Running in Browser Mode (TypeScript Agents)', timestamp: new Date() });
+       this.runFrontendAgents(topic, isDeep);
+    }
+  }
+
+  private async runFrontendAgents(topic: string, isDeep: boolean) {
     let state: AgentState = {
       topic,
       isDeep,
