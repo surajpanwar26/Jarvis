@@ -1,5 +1,4 @@
-
-import { v4 as uuidv4 } from 'uuid'; // Accessing via standard import, assuming environment supports it or fallback
+import { v4 as uuidv4 } from 'uuid';
 
 // --- MONGODB SCHEMA DEFINITIONS (For Backend Implementation) ---
 /*
@@ -25,6 +24,7 @@ import { v4 as uuidv4 } from 'uuid'; // Accessing via standard import, assuming 
 // --- FRONTEND SERVICE ---
 
 const USER_ID_KEY = 'jarvis_user_id';
+const API_URL = "http://localhost:8001/api";
 
 const getUserId = () => {
   let id = localStorage.getItem(USER_ID_KEY);
@@ -41,6 +41,7 @@ export interface ActivityLog {
   documentName?: string;
   documentFormat?: string;
   timestamp: Date;
+  userId?: string;
 }
 
 export const logActivity = async (activity: Omit<ActivityLog, 'timestamp'>) => {
@@ -50,27 +51,50 @@ export const logActivity = async (activity: Omit<ActivityLog, 'timestamp'>) => {
     ...activity
   };
 
-  // 1. FOR PREVIEW / DEMO: Save to LocalStorage
-  const existingLogs = JSON.parse(localStorage.getItem('jarvis_activity_logs') || '[]');
-  existingLogs.push(payload);
-  localStorage.setItem('jarvis_activity_logs', JSON.stringify(existingLogs));
-  
-  console.log('[MongoDB Mock] Logged Activity:', payload);
-
-  // 2. FOR PRODUCTION: Uncomment below to send to your backend API (which connects to Atlas)
-  /*
+  // 1. Send to backend MongoDB
   try {
-    await fetch(process.env.API_URL + '/api/logs', {
+    const response = await fetch(`${API_URL}/logs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const result = await response.json();
+    console.log('[MongoDB] Logged Activity:', result);
   } catch (error) {
     console.error('Failed to log to MongoDB', error);
   }
-  */
+
+  // 2. Also save to LocalStorage as backup
+  try {
+    const existingLogs = JSON.parse(localStorage.getItem('jarvis_activity_logs') || '[]');
+    existingLogs.push(payload);
+    localStorage.setItem('jarvis_activity_logs', JSON.stringify(existingLogs));
+  } catch (error) {
+    console.error('Failed to save to localStorage', error);
+  }
 };
 
-export const getUserHistory = () => {
-  return JSON.parse(localStorage.getItem('jarvis_activity_logs') || '[]');
+export const getUserHistory = async () => {
+  const userId = getUserId();
+  
+  // Try to get history from backend MongoDB first
+  try {
+    const response = await fetch(`${API_URL}/user-history/${userId}`);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const result = await response.json();
+    return result.logs || [];
+  } catch (error) {
+    console.error('Failed to retrieve history from MongoDB, falling back to localStorage', error);
+    // Fallback to localStorage
+    return JSON.parse(localStorage.getItem('jarvis_activity_logs') || '[]');
+  }
 };
