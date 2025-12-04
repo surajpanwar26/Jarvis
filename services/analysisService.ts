@@ -1,31 +1,52 @@
 import { ResearchResult, ChatMessage } from "../types";
-import { getLLMProvider } from "./llmProvider";
+
+const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8002/api";
 
 /**
- * RAG / Document Analysis
+ * Analyze a document using the backend service
  */
 export const analyzeDocument = async (fileBase64: string, mimeType: string): Promise<ResearchResult> => {
   try {
-    const response = await fetch("http://localhost:8002/api/document-analysis", {
+    // Use backend API for document analysis
+    const response = await fetch(`${API_URL}/document-analysis`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ file_base64: fileBase64, mime_type: mimeType })
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.detail || "Document analysis failed");
+      throw new Error(`Document analysis failed: ${response.statusText}`);
     }
 
-    const result: ResearchResult = await response.json();
+    const result = await response.json();
     return result;
-  } catch (error: any) {
-    console.error("Doc analysis failed:", error);
-    return {
-      report: `**Analysis Error**\n\nCould not process document: ${error.message}`,
-      sources: [],
-      images: []
-    };
+  } catch (error) {
+    console.error("Document analysis error:", error);
+    throw error;
+  }
+};
+
+/**
+ * Ask a question using the AI Chatbot
+ */
+export const askQuestion = async (question: string, context: string): Promise<string> => {
+  try {
+    // Use backend API for AI Chatbot
+    const response = await fetch(`${API_URL}/question`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, context })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Question failed: ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    return result.answer;
+  } catch (error) {
+    console.error("Question error:", error);
+    throw error;
   }
 };
 
