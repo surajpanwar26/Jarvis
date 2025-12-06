@@ -171,7 +171,7 @@ export const QuickResultPage: React.FC<QuickResultPageProps> = ({ initialQuery, 
                 <span className="w-2 h-2 rounded-full bg-amber-500 mr-2 animate-pulse"></span>
                 Agent Progress
               </h3>
-              <div className="flex-1 overflow-hidden bg-black/40 rounded border border-white/5 p-2">
+              <div className="flex-1 overflow-y-auto bg-black/40 rounded border border-white/5 p-2 custom-scrollbar">
                 <ResearchLogs logs={logs} />
               </div>
             </div>

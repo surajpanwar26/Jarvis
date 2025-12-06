@@ -17,7 +17,7 @@ export const ResearchLogs: React.FC<ResearchLogsProps> = ({ logs }) => {
   if (logs.length === 0) return null;
 
   return (
-    <div className="h-full overflow-hidden flex flex-col font-mono text-[11px] leading-relaxed relative" ref={scrollRef}>
+    <div className="h-full overflow-y-auto flex flex-col font-mono text-[11px] leading-relaxed relative custom-scrollbar" ref={scrollRef}>
       {logs.map((log) => (
         <div key={log.id} className="mb-2 last:mb-0 animate-fade-in flex items-start group">
           <span className="text-slate-700 mr-2 shrink-0 select-none w-14">

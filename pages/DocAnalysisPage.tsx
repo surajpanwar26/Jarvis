@@ -180,9 +180,11 @@ export const DocAnalysisPage: React.FC<DocAnalysisPageProps> = ({ initialFile, o
              
              {/* Logs */}
              {(status !== ResearchStatus.IDLE) && (
-               <div className="h-48 bg-black/20 rounded-xl p-3 border border-white/10 overflow-hidden flex flex-col">
+               <div className="h-48 bg-black/20 rounded-xl p-3 border border-white/10 flex flex-col">
                  <div className="text-[10px] text-slate-500 font-bold mb-2 uppercase">Processing Logs</div>
-                 <ResearchLogs logs={logs} />
+                 <div className="flex-1 overflow-y-auto custom-scrollbar">
+                   <ResearchLogs logs={logs} />
+                 </div>
                </div>
              )}
           </div>
