@@ -332,46 +332,124 @@ async def document_analysis(request: DocumentAnalysisRequest):
 
 @app.post("/api/llm/generate")
 async def generate_llm_content(request: LLMRequest):
-    """Endpoint to generate content using LLM via backend"""
+    """Endpoint to generate content using LLM via backend with fallback providers"""
     try:
         logger.info(f"Received LLM generation request")
         
         # Import and initialize the LLM provider
         import os
-        from backend.agents.report_agent import ReportAgent
-        
-        # Use the ReportAgent's method to generate content
-        # This ensures we're using the same backend logic
-        google_api_key = os.getenv("GOOGLE_API_KEY")
-        if not google_api_key:
-            raise HTTPException(status_code=500, detail="GOOGLE_API_KEY not configured")
-        
-        # Create a minimal report agent just for LLM calls
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={google_api_key}"
-        
-        payload = {
-            "contents": [{
-                "parts": [{
-                    "text": request.prompt
-                }]
-            }],
-            "generationConfig": {
-                "temperature": 0.7,
-                "maxOutputTokens": 8192 if request.is_report else 4096
-            }
-        }
-        
-        if request.system_instruction:
-            payload["systemInstruction"] = {"parts": [{"text": request.system_instruction}]}
-        
         import requests
-        response = requests.post(url, json=payload)
-        response.raise_for_status()
-        result = response.json()
-        content = result["candidates"][0]["content"]["parts"][0]["text"]
         
-        return {"content": content}
+        # Try providers in order of preference
+        providers = []
         
+        # 1. Google Gemini
+        google_api_key = os.getenv("GOOGLE_API_KEY")
+        if google_api_key:
+            providers.append({
+                "name": "Google Gemini",
+                "url": f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={google_api_key}",
+                "payload": {
+                    "contents": [{
+                        "parts": [{
+                            "text": request.prompt
+                        }]
+                    }],
+                    "generationConfig": {
+                        "temperature": 0.7,
+                        "maxOutputTokens": 8192 if request.is_report else 4096
+                    }
+                },
+                "headers": {"Content-Type": "application/json"}
+            })
+            
+            if request.system_instruction:
+                providers[-1]["payload"]["systemInstruction"] = {"parts": [{"text": request.system_instruction}]}
+        
+        # 2. Groq
+        groq_api_key = os.getenv("GROQ_API_KEY")
+        if groq_api_key:
+            providers.append({
+                "name": "Groq",
+                "url": "https://api.groq.com/openai/v1/chat/completions",
+                "payload": {
+                    "model": "llama-3.3-70b-versatile",
+                    "messages": [
+                        {"role": "system", "content": request.system_instruction or "You are a helpful research assistant."},
+                        {"role": "user", "content": request.prompt}
+                    ],
+                    "temperature": 0.5
+                },
+                "headers": {
+                    "Authorization": f"Bearer {groq_api_key}",
+                    "Content-Type": "application/json"
+                }
+            })
+            
+            if request.json_mode:
+                providers[-1]["payload"]["response_format"] = {"type": "json_object"}
+        
+        # 3. Hugging Face
+        hugging_face_api_key = os.getenv("HUGGINGFACE_API_KEY")
+        if hugging_face_api_key:
+            providers.append({
+                "name": "Hugging Face",
+                "url": "https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3-8B-Instruct",
+                "payload": {
+                    "inputs": f"<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n{request.system_instruction or 'You are a helpful assistant.'}{'' if not request.json_mode else ' Output strict JSON only.'}<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n{request.prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n",
+                    "parameters": {
+                        "max_new_tokens": 4096,
+                        "return_full_text": False,
+                        "temperature": 0.7
+                    }
+                },
+                "headers": {
+                    "Authorization": f"Bearer {hugging_face_api_key}",
+                    "Content-Type": "application/json"
+                }
+            })
+        
+        if not providers:
+            raise HTTPException(status_code=500, detail="No API keys configured for LLM providers")
+        
+        # Try each provider in order
+        last_error = None
+        for provider in providers:
+            try:
+                logger.info(f"Trying LLM provider: {provider['name']}")
+                response = requests.post(
+                    provider["url"],
+                    json=provider["payload"],
+                    headers=provider["headers"]
+                )
+                response.raise_for_status()
+                
+                # Parse response based on provider
+                if provider["name"] == "Google Gemini":
+                    result = response.json()
+                    content = result["candidates"][0]["content"]["parts"][0]["text"]
+                elif provider["name"] == "Groq":
+                    result = response.json()
+                    content = result["choices"][0]["message"]["content"]
+                elif provider["name"] == "Hugging Face":
+                    result = response.json()
+                    content = result[0]["generated_text"] if isinstance(result, list) else result.get("generated_text", "")
+                else:
+                    content = response.text
+                
+                logger.info(f"Successfully generated content using {provider['name']}")
+                return {"content": content, "provider": provider["name"]}
+                
+            except Exception as e:
+                last_error = e
+                logger.warning(f"Failed to generate content with {provider['name']}: {str(e)}")
+                continue
+        
+        # If we get here, all providers failed
+        raise HTTPException(status_code=500, detail=f"All LLM providers failed. Last error: {str(last_error)}")
+        
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"LLM generation failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"LLM generation failed: {str(e)}")
