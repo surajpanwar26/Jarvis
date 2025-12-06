@@ -67,6 +67,17 @@ class ResearcherAgent(BaseAgent):
         
         try:
             response = requests.post(url, json=payload)
+            if not response.ok:
+                error_text = response.text
+                # Handle specific Tavily error cases
+                if response.status_code == 432:
+                    raise Exception("Tavily API usage limit exceeded. Falling back to Google search.")
+                elif response.status_code == 401:
+                    raise Exception("Tavily API key is invalid. Falling back to Google search.")
+                elif response.status_code == 429:
+                    raise Exception("Tavily API rate limit exceeded. Falling back to Google search.")
+                else:
+                    raise Exception(f"Tavily API Error: {response.status_code} - {error_text}")
             response.raise_for_status()
             return response.json()
         except Exception as e:
