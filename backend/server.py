@@ -449,6 +449,12 @@ async def generate_llm_content(request: LLMRequest):
                 
             except Exception as e:
                 last_error = e
+                # Check if this is a quota limit error for Google Gemini
+                if provider["name"] == "Google Gemini":
+                    error_str = str(e).lower()
+                    if "429" in error_str or "quota" in error_str or "limit" in error_str:
+                        logger.warning(f"Google Gemini quota limit hit: {str(e)}")
+                
                 logger.warning(f"Failed to generate content with {provider['name']}: {str(e)}")
                 continue
         

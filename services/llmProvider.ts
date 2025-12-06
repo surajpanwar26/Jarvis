@@ -156,6 +156,10 @@ class GeminiProvider implements LLMProvider {
       
       if (!response.ok) {
         const errorText = await response.text();
+        // Check if this is a quota limit error
+        if (response.status === 429 || errorText.toLowerCase().includes('quota') || errorText.toLowerCase().includes('limit')) {
+          throw new Error(`API Limit Reached: ${errorText}`);
+        }
         throw new Error(`Backend LLM API Error: ${response.status} - ${errorText}`);
       }
       
@@ -163,6 +167,10 @@ class GeminiProvider implements LLMProvider {
       return data.content || "";
     } catch (e: any) {
       console.error("Gemini Generation Failed:", e.message);
+      // Check if this is a quota limit error
+      if (e.message.includes('API Limit Reached') || e.message.includes('quota') || e.message.includes('limit')) {
+        throw new Error(`Google API Limit Reached. Please wait for quota reset or use alternative providers.`);
+      }
       throw new Error(`Gemini Generation Failed: ${e.message}`);
     }
   }
