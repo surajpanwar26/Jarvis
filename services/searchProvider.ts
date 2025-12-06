@@ -79,6 +79,14 @@ const tavilySearch = async (query: string): Promise<SearchResult> => {
 
   if (!response.ok) {
     const errorText = await response.text();
+    // Handle specific Tavily error cases
+    if (response.status === 432) {
+      throw new Error("Tavily API usage limit exceeded. Falling back to Google search.");
+    } else if (response.status === 401) {
+      throw new Error("Tavily API key is invalid. Falling back to Google search.");
+    } else if (response.status === 429) {
+      throw new Error("Tavily API rate limit exceeded. Falling back to Google search.");
+    }
     throw new Error(`Tavily API Error: ${response.status} - ${errorText}`);
   }
   const data = await response.json();
