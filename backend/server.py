@@ -447,13 +447,28 @@ async def generate_llm_content(request: LLMRequest):
                 # Parse response based on provider
                 if provider["name"] == "Google Gemini":
                     result = response.json()
+                    # Log the full response for debugging
+                    logger.debug(f"Gemini response: {result}")
+                    # Check if we have candidates in the response
+                    if "candidates" not in result or len(result["candidates"]) == 0:
+                        raise ValueError("No candidates in Gemini response")
+                    if "content" not in result["candidates"][0] or "parts" not in result["candidates"][0]["content"]:
+                        raise ValueError("Invalid response structure from Gemini")
                     content = result["candidates"][0]["content"]["parts"][0]["text"]
                 elif provider["name"] == "Groq":
                     result = response.json()
+                    # Log the full response for debugging
+                    logger.debug(f"Groq response: {result}")
+                    if "choices" not in result or len(result["choices"]) == 0:
+                        raise ValueError("No choices in Groq response")
+                    if "message" not in result["choices"][0] or "content" not in result["choices"][0]["message"]:
+                        raise ValueError("Invalid response structure from Groq")
                     content = result["choices"][0]["message"]["content"]
                 elif provider["name"] == "Hugging Face":
                     result = response.json()
-                    content = result[0]["generated_text"] if isinstance(result, list) else result.get("generated_text", "")
+                    # Log the full response for debugging
+                    logger.debug(f"Hugging Face response: {result}")
+                    content = result[0]["generated_text"] if isinstance(result, list) and len(result) > 0 and "generated_text" in result[0] else result.get("generated_text", "") if isinstance(result, dict) else ""
                 else:
                     content = response.text
                 
