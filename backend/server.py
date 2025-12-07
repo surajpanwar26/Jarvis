@@ -123,8 +123,8 @@ import os
 # Use environment variable for frontend URL with fallbacks
 frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
 render_frontend_url = "https://jarvis-frontend-bheu.onrender.com"
-# Get the actual deployed frontend URL from environment variables
-deployed_frontend_url = os.getenv("DEPLOYED_FRONTEND_URL", "")
+# Add your actual frontend URL
+actual_frontend_url = "https://jarvis-m1l1.onrender.com"
 
 app.add_middleware(
     CORSMiddleware,
@@ -132,13 +132,7 @@ app.add_middleware(
         render_frontend_url, 
         frontend_url, 
         "http://localhost:5173",
-        "https://jarvis-m1l1.onrender.com",  # Add your actual frontend URL
-        deployed_frontend_url  # Allow custom frontend URL
-    ] if deployed_frontend_url else [
-        render_frontend_url, 
-        frontend_url, 
-        "http://localhost:5173",
-        "https://jarvis-m1l1.onrender.com"   # Add your actual frontend URL
+        actual_frontend_url  # Your actual frontend URL
     ],
     allow_credentials=True,
     allow_methods=["*"],
