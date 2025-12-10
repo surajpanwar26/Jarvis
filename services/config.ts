@@ -41,8 +41,8 @@ export const config = {
   pexelsApiKey: getEnv('PEXELS_API_KEY'),
   // Support both standard names for Google Key
   googleApiKey: getEnv('GOOGLE_API_KEY') || getEnv('API_KEY'),
-  // API URL configuration
-  apiUrl: getEnv('API_URL') || getEnv('REACT_APP_API_URL') || getEnv('VITE_API_URL'),
+  // API URL configuration - prioritize VITE_API_URL, then REACT_APP_API_URL, then API_URL
+  apiUrl: getEnv('VITE_API_URL') || getEnv('REACT_APP_API_URL') || getEnv('API_URL'),
   // API Endpoint URLs
   tavilyApiUrl: getEnv('VITE_TAVILY_API_URL') || getEnv('TAVILY_API_URL'),
   pexelsApiUrl: getEnv('VITE_PEXELS_API_URL') || getEnv('PEXELS_API_URL'),
@@ -55,7 +55,7 @@ export const logConfigStatus = () => {
   console.log("Groq Key:", config.groqApiKey ? "✅ Loaded" : "❌ Missing");
   console.log("Google Key:", config.googleApiKey ? "✅ Loaded" : "❌ Missing");
   console.log("Tavily Key:", config.tavilyApiKey ? "✅ Loaded" : "❌ Missing");
-  console.log("API URL:", config.apiUrl ? config.apiUrl : `⚠️ Using default (localhost:${process.env.PORT || 8002})`);
+  console.log("API URL:", config.apiUrl ? config.apiUrl : "⚠️  Not set - will use default");
   console.log("--------------------------------");
 };
 
@@ -63,10 +63,19 @@ export const hasKey = (key: string | undefined): boolean => !!key && key.length 
 
 // Utility function to get the base API URL
 export const getApiBaseUrl = (): string => {
-  // In production, this should be set via environment variables
+  // Use the configured API URL if available
+  if (config.apiUrl) {
+    return config.apiUrl;
+  }
+  
   // In development, fallback to localhost:8002
-  // In production, this should be set via REACT_APP_API_URL environment variable
-  return config.apiUrl || (typeof window !== 'undefined' ? '' : `http://localhost:${process.env.PORT || 8002}`);
+  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+    return `http://localhost:${process.env.PORT || 8002}`;
+  }
+  
+  // For production, use a more appropriate default
+  console.warn("No API URL configured, using localhost as fallback");
+  return `http://localhost:${process.env.PORT || 8002}`;
 };
 
 // Utility function to get the full API URL

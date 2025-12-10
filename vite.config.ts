@@ -12,6 +12,7 @@ export default defineConfig(({ mode }) => {
     define: {
       // Expose only specific env vars to process.env for compatibility
       'process.env.REACT_APP_API_URL': JSON.stringify(env.REACT_APP_API_URL || env.VITE_API_URL),
+      'process.env.API_URL': JSON.stringify(env.API_URL || env.VITE_API_URL || env.REACT_APP_API_URL),
       'process.env.NODE_ENV': JSON.stringify(mode),
       // Add other specific environment variables as needed
     }
