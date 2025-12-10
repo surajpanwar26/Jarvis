@@ -1,0 +1,30 @@
+# Patch file for applying changes to the correct Jarvis repository
+
+## Changes needed for render.yaml:
+
+1. Update CORS_ORIGINS in backend service:
+   FROM: value: https://jarvis-frontend.onrender.com
+   TO: value: https://jarvis-l8gx.onrender.com,http://localhost:5173
+
+2. Update frontend service name:
+   FROM: name: jarvis-frontend
+   TO: name: jarvis
+
+3. Add VITE_API_URL to frontend service envVars:
+   ADD: 
+      - key: VITE_API_URL
+        value: https://jarvis-backend-nzcg.onrender.com
+
+4. Update REACT_APP_API_URL value:
+   FROM: value: https://jarvis-backend.onrender.com
+   TO: value: https://jarvis-backend-nzcg.onrender.com
+
+5. Update routes destination:
+   FROM: destination: https://jarvis-backend.onrender.com/api/
+   TO: destination: https://jarvis-backend-nzcg.onrender.com/api/
+
+## Changes needed for backend/auth.py:
+
+1. Update OAuth redirect URI:
+   FROM: redirect_uri = os.getenv("GOOGLE_REDIRECT_URI", f"http://localhost:{os.getenv('PORT', '8002')}/api/auth/callback")
+   TO: redirect_uri = os.getenv("GOOGLE_REDIRECT_URI", f"https://jarvis-backend-nzcg.onrender.com/api/auth/callback")
