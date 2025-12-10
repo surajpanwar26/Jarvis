@@ -44,14 +44,24 @@ if os.getenv("ENVIRONMENT") == "production":
 logger.info(f"CORS origins configured: {ALL_CORS_ORIGINS}")
 
 # Add CORS middleware with more permissive settings for production
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=ALL_CORS_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    allow_origin_regex="https://.*\\.onrender\\.com",  # Allow all Render subdomains
-)
+# In production, allow all origins to avoid CORS issues
+if os.getenv("ENVIRONMENT") == "production":
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  # Allow all origins in production
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=ALL_CORS_ORIGINS,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+        allow_origin_regex="https://.*\\.onrender\\.com",  # Allow all Render subdomains
+    )
 
 # Import agents
 from backend.agents.chief_agent import ChiefAgent
