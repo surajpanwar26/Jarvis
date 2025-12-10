@@ -352,9 +352,10 @@ async def generate_llm_content_endpoint(request: LLMRequest):
         # 3. Hugging Face (deprioritized fallback)
         hugging_face_api_key = os.getenv("HUGGINGFACE_API_KEY")
         if hugging_face_api_key:
+            # Use a working model from Hugging Face
             providers.append({
                 "name": "Hugging Face",
-                "url": "https://router.huggingface.co/models/Qwen/Qwen2.5-7B-Instruct",
+                "url": "https://api-inference.huggingface.co/models/google/gemma-2-9b-it",
                 "payload": {
                     "inputs": f"{request.system_instruction or 'You are a helpful assistant.'}\n\n{request.prompt}",
                     "parameters": {
@@ -368,7 +369,7 @@ async def generate_llm_content_endpoint(request: LLMRequest):
                     "Content-Type": "application/json"
                 }
             })
-        
+
         if not providers:
             raise HTTPException(status_code=500, detail="No API keys configured for LLM providers")
         
