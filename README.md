@@ -135,8 +135,12 @@ SESSION_SECRET_KEY=your_session_secret_key
 JWT_SECRET_KEY=your_jwt_secret_key
 
 # API Configuration
-API_URL=http://localhost:8002
-VITE_API_URL=http://localhost:8002
+API_URL=http://localhost:${PORT:-8002}
+VITE_API_URL=http://localhost:${PORT:-8002}
+
+# Port Configuration (Optional)
+# PORT=8002
+# FRONTEND_PORT=5173
 ```
 
 ## Project Structure

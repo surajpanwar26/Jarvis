@@ -1,149 +1,59 @@
+import os
+import logging
+from datetime import datetime
+from typing import List, Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import os
-from typing import List, Optional
-import logging
 import asyncio
-from dotenv import load_dotenv
-from datetime import datetime
-from pymongo import MongoClient
-import time
-import urllib.parse
-from starlette.middleware.sessions import SessionMiddleware
-from starlette.requests import Request
-
-# Load environment variables from .env file
-load_dotenv()
+import requests
+from requests.exceptions import Timeout
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+
 logger = logging.getLogger(__name__)
 
-# MongoDB connection with retry logic
-MONGODB_URI = os.getenv("MONGODB_URI")
-mongo_client = None
-db = None
-users_collection = None
-activity_collection = None
+# Initialize FastAPI app
+app = FastAPI()
 
-if MONGODB_URI:
-    max_retries = 3
-    retry_delay = 5
-    
-    # Handle both SRV and standard URI formats
-    encoded_uri = MONGODB_URI  # Use as-is for multi-host URIs
-    
-    # Only parse and encode if it's a simple URI (not multi-host)
-    if "," not in MONGODB_URI and "@" in MONGODB_URI:
-        try:
-            parsed_uri = urllib.parse.urlparse(MONGODB_URI)
-            username = parsed_uri.username
-            password = parsed_uri.password
-            
-            # Reconstruct URI with encoded credentials
-            if username and password:
-                encoded_username = urllib.parse.quote_plus(username)
-                encoded_password = urllib.parse.quote_plus(password)
-                new_netloc = f"{encoded_username}:{encoded_password}@{parsed_uri.hostname}"
-                if parsed_uri.port:
-                    new_netloc += f":{parsed_uri.port}"
-                encoded_uri = urllib.parse.urlunparse((
-                    parsed_uri.scheme,
-                    new_netloc,
-                    parsed_uri.path,
-                    parsed_uri.params,
-                    parsed_uri.query,
-                    parsed_uri.fragment
-                ))
-                
-        except Exception as e:
-            logger.warning(f"Failed to encode MongoDB URI: {e}")
-            encoded_uri = MONGODB_URI
-    
-    # Check if SSL is disabled in the URI
-    use_ssl = "ssl=false" not in MONGODB_URI.lower()
-    
-    for attempt in range(max_retries):
-        try:
-            if use_ssl:
-                mongo_client = MongoClient(
-                    encoded_uri,
-                    serverSelectionTimeoutMS=10000,
-                    connectTimeoutMS=20000,
-                    socketTimeoutMS=20000,
-                    maxPoolSize=50,
-                    minPoolSize=5,
-                    tls=True,
-                    tlsAllowInvalidCertificates=True,
-                    tlsAllowInvalidHostnames=True
-                )
-            else:
-                mongo_client = MongoClient(
-                    encoded_uri,
-                    serverSelectionTimeoutMS=10000,
-                    connectTimeoutMS=20000,
-                    socketTimeoutMS=20000,
-                    maxPoolSize=50,
-                    minPoolSize=5
-                )
-            # Test the connection
-            mongo_client.admin.command('ping')
-            db = mongo_client["jarvis_database"]
-            users_collection = db["users"]
-            activity_collection = db["activity_logs"]
-            
-            # Create indexes for better performance
-            users_collection.create_index("userId", unique=True)
-            activity_collection.create_index("userId")
-            activity_collection.create_index("timestamp")
-            
-            logger.info("Connected to MongoDB successfully")
-            break
-        except Exception as e:
-            logger.error(f"Attempt {attempt + 1} failed to connect to MongoDB: {e}")
-            if attempt < max_retries - 1:
-                logger.info(f"Retrying in {retry_delay} seconds...")
-                time.sleep(retry_delay)
-            else:
-                logger.error("Failed to connect to MongoDB after all retries")
-                mongo_client = None
-else:
-    logger.warning("MONGODB_URI not found in environment variables")
-
-# Initialize the FastAPI app
-app = FastAPI(title="JARVIS Research System API")
-
-# Add Session Middleware for OAuth
-app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET_KEY", "your-session-secret-key-change-in-production"))
-
-import os
-
-# Add CORS middleware to allow requests from the frontend
-# Use environment variable for frontend URL with fallbacks
-frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
-# Add your actual frontend URL
-actual_frontend_url = "https://jarvis-m1l1.onrender.com"
-render_frontend_url = "https://jarvis-frontend.onrender.com"  # Default Render frontend URL
+# CORS middleware
+# Get CORS origins from environment variable, with fallback to localhost for development
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", f"http://localhost:{os.getenv('FRONTEND_PORT', '5173')},http://localhost:{os.getenv('PORT', '8000')},http://localhost:3000").split(",")
+CORS_ORIGINS = [origin.strip() for origin in CORS_ORIGINS if origin.strip()]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        frontend_url, 
-        "http://localhost:5173",
-        actual_frontend_url,  # Your actual frontend URL
-        render_frontend_url   # Default Render frontend URL
-    ],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["*"]
 )
 
 # Import agents
 from backend.agents.chief_agent import ChiefAgent
 
 # Import auth routes
-from backend.auth import router as auth_router
+from backend.auth import router as auth_router, mongo_client, users_collection
+
+# Initialize MongoDB collections if client is available
+activity_collection = None
+if mongo_client is not None:
+    try:
+        db = mongo_client["jarvis_database"]
+        activity_collection = db["activity_logs"]
+        # Create indexes for better performance
+        activity_collection.create_index("userId")
+        activity_collection.create_index("timestamp")
+        activity_collection.create_index([("userId", 1), ("timestamp", -1)])
+        print("Initialized MongoDB activity collection successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize MongoDB activity collection: {e}")
+        activity_collection = None
+
 app.include_router(auth_router, prefix="/api")
 
 class ResearchRequest(BaseModel):
@@ -186,6 +96,7 @@ class User(BaseModel):
 
 class ActivityLog(BaseModel):
     userId: str
+    userEmail: Optional[str] = None
     timestamp: datetime
     actionType: str  # 'QUICK_SEARCH', 'DEEP_RESEARCH', 'DOC_ANALYSIS'
     query: Optional[str] = None
@@ -344,7 +255,7 @@ async def document_analysis(request: DocumentAnalysisRequest):
         raise HTTPException(status_code=500, detail=f"Document analysis failed: {str(e)}")
 
 @app.post("/api/llm/generate")
-async def generate_llm_content(request: LLMRequest):
+async def generate_llm_content_endpoint(request: LLMRequest):
     """Endpoint to generate content using LLM via backend with fallback providers"""
     try:
         logger.info(f"Received LLM generation request")
@@ -352,11 +263,16 @@ async def generate_llm_content(request: LLMRequest):
         # Import and initialize the LLM provider
         import os
         import requests
+        from requests.exceptions import Timeout
         
-        # Try providers in order of preference
+        # Optimize token usage based on request type
+        is_report_generation = request.is_report or "report" in request.prompt.lower()
+        
+        # Try providers in order of preference (Google Gemini -> Groq -> Hugging Face)
+        # Hugging Face deprioritized due to reliability issues
         providers = []
         
-        # 1. Google Gemini
+        # 1. Google Gemini (primary) - Re-enabled for better accuracy
         google_api_key = os.getenv("GOOGLE_API_KEY")
         if google_api_key:
             providers.append({
@@ -370,7 +286,7 @@ async def generate_llm_content(request: LLMRequest):
                     }],
                     "generationConfig": {
                         "temperature": 0.7,
-                        "maxOutputTokens": 4096 if request.is_report else 2048
+                        "maxOutputTokens": 4096 if is_report_generation else 2048
                     }
                 },
                 "headers": {"Content-Type": "application/json"}
@@ -379,20 +295,20 @@ async def generate_llm_content(request: LLMRequest):
             if request.system_instruction:
                 providers[-1]["payload"]["systemInstruction"] = {"parts": [{"text": request.system_instruction}]}
         
-        # 2. Groq
+        # 2. Groq (first fallback)
         groq_api_key = os.getenv("GROQ_API_KEY")
         if groq_api_key:
             providers.append({
                 "name": "Groq",
                 "url": "https://api.groq.com/openai/v1/chat/completions",
                 "payload": {
-                    "model": "llama-3.3-70b-versatile",
+                    "model": "llama-3.1-8b-instant",
                     "messages": [
                         {"role": "system", "content": request.system_instruction or "You are a helpful research assistant."},
                         {"role": "user", "content": request.prompt}
                     ],
                     "temperature": 0.5,
-                    "max_tokens": 4096 if request.is_report else 2048
+                    "max_tokens": 1024 if not is_report_generation else 2048  # Reduce tokens for non-report generation
                 },
                 "headers": {
                     "Authorization": f"Bearer {groq_api_key}",
@@ -403,16 +319,16 @@ async def generate_llm_content(request: LLMRequest):
             if request.json_mode:
                 providers[-1]["payload"]["response_format"] = {"type": "json_object"}
         
-        # 3. Hugging Face
+        # 3. Hugging Face (deprioritized fallback)
         hugging_face_api_key = os.getenv("HUGGINGFACE_API_KEY")
         if hugging_face_api_key:
             providers.append({
                 "name": "Hugging Face",
-                "url": "https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3-8B-Instruct",
+                "url": "https://router.huggingface.co/models/Qwen/Qwen2.5-7B-Instruct",
                 "payload": {
-                    "inputs": f"<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n{request.system_instruction or 'You are a helpful assistant.'}{'' if not request.json_mode else ' Output strict JSON only.'}<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n{request.prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n",
+                    "inputs": f"{request.system_instruction or 'You are a helpful assistant.'}\n\n{request.prompt}",
                     "parameters": {
-                        "max_new_tokens": 2048,
+                        "max_new_tokens": 500 if not is_report_generation else 1000,  # Reduce tokens for non-report generation
                         "return_full_text": False,
                         "temperature": 0.7
                     }
@@ -422,6 +338,28 @@ async def generate_llm_content(request: LLMRequest):
                     "Content-Type": "application/json"
                 }
             })
+        groq_api_key = os.getenv("GROQ_API_KEY")
+        if groq_api_key:
+            providers.append({
+                "name": "Groq",
+                "url": "https://api.groq.com/openai/v1/chat/completions",
+                "payload": {
+                    "model": "llama-3.1-8b-instant",
+                    "messages": [
+                        {"role": "system", "content": request.system_instruction or "You are a helpful research assistant."},
+                        {"role": "user", "content": request.prompt}
+                    ],
+                    "temperature": 0.5,
+                    "max_tokens": 1024 if not is_report_generation else 2048  # Reduce tokens for non-report generation
+                },
+                "headers": {
+                    "Authorization": f"Bearer {groq_api_key}",
+                    "Content-Type": "application/json"
+                }
+            })
+            
+            if request.json_mode:
+                providers[-1]["payload"]["response_format"] = {"type": "json_object"}
         
         if not providers:
             raise HTTPException(status_code=500, detail="No API keys configured for LLM providers")
@@ -431,10 +369,12 @@ async def generate_llm_content(request: LLMRequest):
         for provider in providers:
             try:
                 logger.info(f"Trying LLM provider: {provider['name']}")
+                # Add timeout to prevent hanging requests
                 response = requests.post(
                     provider["url"],
                     json=provider["payload"],
-                    headers=provider["headers"]
+                    headers=provider["headers"],
+                    timeout=30  # 30 second timeout
                 )
                 response.raise_for_status()
                 
@@ -442,31 +382,41 @@ async def generate_llm_content(request: LLMRequest):
                 if provider["name"] == "Google Gemini":
                     result = response.json()
                     content = result["candidates"][0]["content"]["parts"][0]["text"]
-                elif provider["name"] == "Groq":
-                    result = response.json()
-                    content = result["choices"][0]["message"]["content"]
                 elif provider["name"] == "Hugging Face":
                     result = response.json()
                     content = result[0]["generated_text"] if isinstance(result, list) else result.get("generated_text", "")
+                elif provider["name"] == "Groq":
+                    result = response.json()
+                    content = result["choices"][0]["message"]["content"]
                 else:
                     content = response.text
                 
                 logger.info(f"Successfully generated content using {provider['name']}")
                 return {"content": content, "provider": provider["name"]}
                 
+            except Timeout:
+                last_error = Timeout("Request timed out")
+                logger.warning(f"{provider['name']} request timed out")
+                continue
             except Exception as e:
                 last_error = e
-                # Check if this is a quota limit error for Google Gemini
-                if provider["name"] == "Google Gemini":
-                    error_str = str(e).lower()
-                    if "429" in error_str or "quota" in error_str or "limit" in error_str:
-                        logger.warning(f"Google Gemini quota limit hit: {str(e)}")
+                # Check if this is a quota limit error
+                error_str = str(e).lower()
+                is_quota_error = "429" in error_str or "quota" in error_str or "limit" in error_str or "exceeded" in error_str
                 
-                logger.warning(f"Failed to generate content with {provider['name']}: {str(e)}")
+                if is_quota_error:
+                    logger.warning(f"{provider['name']} quota limit hit: {str(e)}")
+                else:
+                    logger.warning(f"Failed to generate content with {provider['name']}: {str(e)}")
+                
+                # If it's not a quota error, we might want to continue to the next provider
+                # If it is a quota error, we still continue to the next provider as per fallback strategy
                 continue
         
-        # If we get here, all providers failed
-        raise HTTPException(status_code=500, detail=f"All LLM providers failed. Last error: {str(last_error)}")
+        # If we get here, all providers failed - return a simple fallback response
+        logger.warning(f"All LLM providers failed. Last error: {str(last_error)}. Returning fallback response.")
+        fallback_content = f"I apologize, but I'm unable to generate a detailed response at the moment due to API limitations. Here's a brief overview based on general knowledge:\n\n{request.prompt}\n\nThis is a fallback response because all AI providers are currently unavailable."
+        return {"content": fallback_content, "provider": "Fallback"}
         
     except HTTPException:
         raise
@@ -482,11 +432,15 @@ async def log_activity(activity: ActivityLog):
         return {"message": "MongoDB not connected"}
     
     try:
-        # Update user's last active time
+        # Update user's last active time and email if provided
         user_data = {
             "userId": activity.userId,
             "lastActive": activity.timestamp
         }
+        
+        # Add email if provided in the activity log
+        if activity.userEmail:
+            user_data["email"] = activity.userEmail
         
         users_collection.update_one(
             {"userId": activity.userId},
@@ -529,10 +483,42 @@ async def get_user_history(user_id: str):
 async def research_options():
     return {"message": "API endpoint for research requests"}
 
+@app.get("/api/duckduckgo/search")
+async def duckduckgo_search(query: str, max_results: int = 10):
+    """Endpoint to search for text results using DuckDuckGo"""
+    try:
+        from backend.search.duckduckgo_search import perform_duckduckgo_search
+        
+        # Perform DuckDuckGo search
+        result = perform_duckduckgo_search(query)
+        
+        # Limit results
+        limited_results = result.get("results", [])[:max_results]
+        result["results"] = limited_results
+        
+        return result
+    except Exception as e:
+        logger.error(f"DuckDuckGo search failed: {e}")
+        raise HTTPException(status_code=500, detail=f"DuckDuckGo search failed: {str(e)}")
+
+@app.get("/api/duckduckgo/images")
+async def duckduckgo_image_search(query: str, max_results: int = 5):
+    """Endpoint to search for images using DuckDuckGo"""
+    try:
+        from backend.search.duckduckgo_search import perform_duckduckgo_search
+        
+        # Perform DuckDuckGo search
+        result = perform_duckduckgo_search(query)
+        
+        # Return only the images
+        return {"images": result.get("images", [])[:max_results]}
+    except Exception as e:
+        logger.error(f"DuckDuckGo image search failed: {e}")
+        raise HTTPException(status_code=500, detail=f"DuckDuckGo image search failed: {str(e)}")
+
 if __name__ == "__main__":
     import uvicorn
     import os
     # Render.com requires binding to PORT environment variable
     port = int(os.environ.get("PORT", 8002))
     uvicorn.run("backend.server:app", host="0.0.0.0", port=port, reload=False)
-

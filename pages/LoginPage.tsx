@@ -16,7 +16,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     
     // Use environment variable for API URL with fallback to localhost
     // @ts-ignore: ImportMeta.env is not properly typed in TypeScript
-    const apiUrl = import.meta.env?.VITE_API_URL || 'http://localhost:8002';
+    const apiUrl = import.meta.env?.VITE_API_URL || `http://localhost:${import.meta.env?.PORT || 8002}`;
     const popup = window.open(
       `${apiUrl}/api/auth/login`,
       'Google Login',

@@ -136,7 +136,7 @@ def generate_user_id(email: str) -> str:
 async def login_via_google(request: Request):
     """Initiate Google OAuth login"""
     # Use environment variable for redirect URI with fallback to localhost
-    redirect_uri = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8002/api/auth/callback")
+    redirect_uri = os.getenv("GOOGLE_REDIRECT_URI", f"http://localhost:{os.getenv('PORT', '8002')}/api/auth/callback")
     # Force account selection by adding prompt parameter
     return await oauth.google.authorize_redirect(
         request, 
@@ -200,8 +200,9 @@ async def auth_via_google(request: Request):
         </head>
         <body>
             <script>
-                // Store token in localStorage
+                // Store token and email in localStorage
                 localStorage.setItem('authToken', '{access_token}');
+                localStorage.setItem('jarvis_user_email', '{user["email"]}');
                 
                 // Communicate with parent window
                 if (window.opener) {{
