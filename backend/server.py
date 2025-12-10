@@ -30,21 +30,27 @@ HTTPS_CORS_ORIGINS = []
 for origin in CORS_ORIGINS:
     if origin.startswith("http://"):
         HTTPS_CORS_ORIGINS.append(origin.replace("http://", "https://"))
-    HTTPS_CORS_ORIGINS.append(origin)
+    else:
+        HTTPS_CORS_ORIGINS.append(origin)
 
 # Combine both http and https origins
 ALL_CORS_ORIGINS = list(set(HTTPS_CORS_ORIGINS + CORS_ORIGINS))
 
+# For production, also allow all origins as a fallback
+if os.getenv("ENVIRONMENT") == "production":
+    ALL_CORS_ORIGINS.append("https://jarvis-l8gx.onrender.com")
+
 # Log the CORS origins for debugging
 logger.info(f"CORS origins configured: {ALL_CORS_ORIGINS}")
 
-# Add specific CORS origins
+# Add CORS middleware with more permissive settings for production
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALL_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"]
+    allow_headers=["*"],
+    allow_origin_regex="https://.*\\.onrender\\.com",  # Allow all Render subdomains
 )
 
 # Import agents
