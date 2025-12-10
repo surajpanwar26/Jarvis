@@ -26,16 +26,18 @@ services:
       - key: JWT_SECRET_KEY
         sync: false
       - key: CORS_ORIGINS
-        value: https://jarvis-l8gx.onrender.com
+        value: https://jarvis-l8gx.onrender.com,http://localhost:5173
 
   # Frontend Service
   - type: web
-    name: jarvis-frontend
+    name: jarvis
     env: static
     plan: free
     buildCommand: npm ci && npm run build
     staticPublishPath: dist
     envVars:
+      - key: VITE_API_URL
+        value: https://jarvis-backend-nzcg.onrender.com
       - key: REACT_APP_API_URL
         value: https://jarvis-backend-nzcg.onrender.com
 
