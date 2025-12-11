@@ -191,7 +191,7 @@ export const DocAnalysisPage: React.FC<DocAnalysisPageProps> = ({ initialFile, o
 
              {/* Content */}
              <div className="flex-1 overflow-y-auto p-8 custom-scrollbar bg-black/20">
-                {status === ResearchStatus.IDLE || status === ResearchStatus.PLANNING ? (
+                {(status === ResearchStatus.IDLE || status === ResearchStatus.PLANNING) && !result?.report ? (
                   // If idle and no initial file processed yet (or reset), show uploader
                   !initialFile ? (
                     <div className="h-full flex flex-col justify-center">
@@ -204,10 +204,20 @@ export const DocAnalysisPage: React.FC<DocAnalysisPageProps> = ({ initialFile, o
                   )
                 ) : (
                   <>
-                    {status === ResearchStatus.SYNTHESIZING ? (
+                    {status === ResearchStatus.SYNTHESIZING && !result?.report ? (
                       <WaveLoader message="Generating Document Analysis Report..." />
+                    ) : result?.report ? (
+                      <>
+                        <div className="mb-4 p-3 bg-green-900/20 border border-green-800/30 rounded-lg text-green-400 text-sm font-medium">
+                          Document analysis complete for "{docName}"
+                        </div>
+                        <MarkdownRenderer content={result.report} />
+                      </>
                     ) : (
-                      <MarkdownRenderer content={result?.report || ""} />
+                      <div className="text-center text-slate-500">
+                        <p>No analysis report available.</p>
+                        <p className="text-sm mt-2">Please upload a document to begin analysis.</p>
+                      </div>
                     )}
                     {status === ResearchStatus.ERROR && !result?.report && (
                       <div className="text-red-400 text-center font-mono mt-10">
