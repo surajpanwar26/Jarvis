@@ -52,7 +52,22 @@ class HuggingFaceProvider implements LLMProvider {
         throw new Error(`HuggingFace API Error: ${response.status} - ${errorText}`);
       }
       
-      const data = await response.json();
+      // Handle empty responses
+      const responseText = await response.text();
+      if (!responseText || responseText.trim() === '') {
+        console.warn("HuggingFace provider returned empty response");
+        throw new Error("HuggingFace provider returned empty response");
+      }
+      
+      // Try to parse JSON
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        console.warn("HuggingFace provider returned malformed JSON:", responseText);
+        throw new Error(`HuggingFace provider returned malformed JSON: ${responseText.substring(0, 100)}...`);
+      }
+      
       // Check if this is a fallback response and handle appropriately
       if (data.provider === "Fallback") {
         console.warn("HuggingFace provider fell back to fallback response");
@@ -107,7 +122,22 @@ class GroqProvider implements LLMProvider {
         throw new Error(`Groq API Error: ${response.status} - ${errorText}`);
       }
       
-      const data = await response.json();
+      // Handle empty responses
+      const responseText = await response.text();
+      if (!responseText || responseText.trim() === '') {
+        console.warn("Groq provider returned empty response");
+        throw new Error("Groq provider returned empty response");
+      }
+      
+      // Try to parse JSON
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        console.warn("Groq provider returned malformed JSON:", responseText);
+        throw new Error(`Groq provider returned malformed JSON: ${responseText.substring(0, 100)}...`);
+      }
+      
       // Check if this is a fallback response and handle appropriately
       if (data.provider === "Fallback") {
         console.warn("Groq provider fell back to fallback response");
@@ -166,7 +196,22 @@ class GeminiProvider implements LLMProvider {
         throw new Error(`Backend LLM API Error: ${response.status} - ${errorText}`);
       }
       
-      const data = await response.json();
+      // Handle empty responses
+      const responseText = await response.text();
+      if (!responseText || responseText.trim() === '') {
+        console.warn("Gemini provider returned empty response");
+        throw new Error("Gemini provider returned empty response");
+      }
+      
+      // Try to parse JSON
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        console.warn("Gemini provider returned malformed JSON:", responseText);
+        throw new Error(`Gemini provider returned malformed JSON: ${responseText.substring(0, 100)}...`);
+      }
+      
       // Check if this is a fallback response and handle appropriately
       if (data.provider === "Fallback") {
         console.warn("Gemini provider fell back to fallback response");
