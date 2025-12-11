@@ -20,6 +20,10 @@ config = Config(environ=os.environ)
 oauth = OAuth(config)
 
 # Register Google OAuth
+print("Registering Google OAuth client...")
+print(f"GOOGLE_CLIENT_ID: {os.getenv('GOOGLE_CLIENT_ID')}")
+print(f"GOOGLE_CLIENT_SECRET: {'*' * len(os.getenv('GOOGLE_CLIENT_SECRET', '')) if os.getenv('GOOGLE_CLIENT_SECRET') else 'Not set'}")
+
 oauth.register(
     name='google',
     client_id=os.getenv('GOOGLE_CLIENT_ID'),
@@ -136,11 +140,13 @@ def generate_user_id(email: str) -> str:
 @router.get("/auth/google/callback")
 async def auth_via_google_alias(request: Request):
     """Alias for Google OAuth callback to match Google Console configuration"""
+    print("OAuth callback received at /api/auth/google/callback")
     return await auth_via_google(request)
 
 @router.get("/callback")
 async def auth_via_google(request: Request):
     """Handle Google OAuth callback"""
+    print("OAuth callback received at /api/callback")
     try:
         # Get user info from Google
         token = await oauth.google.authorize_access_token(request)
@@ -264,12 +270,17 @@ async def login_via_google(request: Request):
     else:
         print(f"Using explicit redirect URI: {redirect_uri}")
     
-    # Force account selection by adding prompt parameter
-    return await oauth.google.authorize_redirect(
-        request, 
-        redirect_uri,
-        prompt='select_account'
-    )
+    try:
+        # Force account selection by adding prompt parameter
+        return await oauth.google.authorize_redirect(
+            request, 
+            redirect_uri,
+            prompt='select_account'
+        )
+    except Exception as e:
+        print(f"OAuth redirect failed: {str(e)}")
+        # Return an error response instead of letting it fall through
+        raise HTTPException(status_code=500, detail=f"Failed to initiate OAuth: {str(e)}")
 
 @router.get("/logout")
 async def logout(request: Request):
