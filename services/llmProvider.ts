@@ -69,12 +69,14 @@ class HuggingFaceProvider implements LLMProvider {
       }
       
       // Check if this is a fallback response and handle appropriately
+      // The backend now returns standardized format: {content, provider, attempted_providers}
       if (data.provider === "Fallback") {
         console.warn("HuggingFace provider fell back to fallback response");
         // Return the fallback content but don't throw an error
-        return data.content || data.result || "";
+        return data.content || "";
       }
-      return data.result || data.content || "";
+      // Handle the standardized backend response format
+      return data.content || data.result || "";
     } catch (error) {
       console.error("HuggingFace Generation Failed:", error);
       // Re-throw the error to allow proper fallback handling
@@ -139,12 +141,14 @@ class GroqProvider implements LLMProvider {
       }
       
       // Check if this is a fallback response and handle appropriately
+      // The backend now returns standardized format: {content, provider, attempted_providers}
       if (data.provider === "Fallback") {
         console.warn("Groq provider fell back to fallback response");
         // Return the fallback content but don't throw an error
-        return data.content || data.result || "";
+        return data.content || "";
       }
-      return data.result || data.content || "";
+      // Handle the standardized backend response format
+      return data.content || data.result || "";
     } catch (error) {
       console.error("Groq Generation Failed:", error);
       // Re-throw the error to allow proper fallback handling
@@ -213,12 +217,14 @@ class GeminiProvider implements LLMProvider {
       }
       
       // Check if this is a fallback response and handle appropriately
+      // The backend now returns standardized format: {content, provider, attempted_providers}
       if (data.provider === "Fallback") {
         console.warn("Gemini provider fell back to fallback response");
         // Return the fallback content but don't throw an error
         return data.content || "";
       }
-      return data.content || "";
+      // Handle the standardized backend response format
+      return data.content || data.result || "";
     } catch (e: any) {
       console.error("Gemini Generation Failed:", e.message);
       // Check if this is a quota limit error
