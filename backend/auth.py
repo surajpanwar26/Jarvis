@@ -135,16 +135,33 @@ def generate_user_id(email: str) -> str:
 @router.get("/login")
 async def login_via_google(request: Request):
     """Initiate Google OAuth login"""
-    # Determine the correct redirect URI based on the request origin
-    # Check if this is a production environment
-    is_production = "jarvis-backend-nzcg.onrender.com" in request.headers.get("host", "")
+    # Log request information for debugging
+    host = request.headers.get("host", "")
+    origin = request.headers.get("origin", "")
+    referer = request.headers.get("referer", "")
     
-    if is_production:
-        # Use the production frontend URL
-        redirect_uri = "https://jarvis-l8gx.onrender.com/api/auth/callback"
+    print(f"OAuth login request - Host: {host}, Origin: {origin}, Referer: {referer}")
+    
+    # Determine the correct redirect URI based on environment variables or request origin
+    # Check if we have an explicit redirect URI set in environment variables (highest priority)
+    redirect_uri = os.getenv("GOOGLE_REDIRECT_URI")
+    
+    print(f"Using redirect URI from env var: {redirect_uri}")
+    
+    if not redirect_uri:
+        # If no explicit redirect URI, determine based on environment
+        is_production = "jarvis-backend-nzcg.onrender.com" in host
+        
+        if is_production:
+            # Use the production frontend URL
+            redirect_uri = "https://jarvis-l8gx.onrender.com/api/auth/callback"
+        else:
+            # Use localhost frontend port
+            redirect_uri = f"http://localhost:{os.getenv('FRONTEND_PORT', '5173')}/api/auth/callback"
+        
+        print(f"Generated redirect URI: {redirect_uri}")
     else:
-        # Use environment variable for redirect URI with fallback to localhost frontend port
-        redirect_uri = os.getenv("GOOGLE_REDIRECT_URI", f"http://localhost:{os.getenv('FRONTEND_PORT', '5173')}/api/auth/callback")
+        print(f"Using explicit redirect URI: {redirect_uri}")
     
     # Force account selection by adding prompt parameter
     return await oauth.google.authorize_redirect(
