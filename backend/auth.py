@@ -153,11 +153,11 @@ async def login_via_google(request: Request):
         is_production = "jarvis-backend-nzcg.onrender.com" in host
         
         if is_production:
-            # Use the production frontend URL
-            redirect_uri = "https://jarvis-l8gx.onrender.com/api/auth/callback"
+            # Use the production frontend URL - note: the router is mounted at /api, so callback is at /api/callback
+            redirect_uri = "https://jarvis-l8gx.onrender.com/api/callback"
         else:
             # Use localhost frontend port
-            redirect_uri = f"http://localhost:{os.getenv('FRONTEND_PORT', '5173')}/api/auth/callback"
+            redirect_uri = f"http://localhost:{os.getenv('FRONTEND_PORT', '5173')}/api/callback"
         
         print(f"Generated redirect URI: {redirect_uri}")
     else:

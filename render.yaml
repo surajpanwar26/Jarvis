@@ -30,7 +30,7 @@ services:
       - key: ENVIRONMENT
         value: production
       - key: GOOGLE_REDIRECT_URI
-        value: https://jarvis-l8gx.onrender.com/api/auth/callback
+        value: https://jarvis-l8gx.onrender.com/api/callback
 
   # Frontend Service
   - type: web
