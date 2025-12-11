@@ -23,9 +23,16 @@ def perform_wikipedia_search(query: str) -> Dict[str, Any]:
     try:
         logger.info(f"Performing Wikipedia search for: {query}")
         
-        # First, search for relevant pages
-        search_url = "https://en.wikipedia.org/api/rest_v1/page/search"
-        search_params = {"q": query}
+        # First, search for relevant pages using the correct Wikipedia API endpoint
+        # The correct endpoint for search is /api.php not /api/rest_v1/page/search
+        search_url = "https://en.wikipedia.org/w/api.php"
+        search_params = {
+            "action": "query",
+            "format": "json",
+            "list": "search",
+            "srsearch": query,
+            "srlimit": 10
+        }
         
         # Wikipedia API requires a proper User-Agent header
         headers = {
@@ -36,7 +43,7 @@ def perform_wikipedia_search(query: str) -> Dict[str, Any]:
         search_response.raise_for_status()
         search_data = search_response.json()
         
-        if not search_data.get("pages"):
+        if not search_data.get("query", {}).get("search"):
             logger.warning(f"No Wikipedia pages found for query: {query}")
             return {
                 "answer": f"No detailed information found about '{query}' on Wikipedia.",
@@ -45,12 +52,11 @@ def perform_wikipedia_search(query: str) -> Dict[str, Any]:
             }
         
         # Get the first relevant page
-        page = search_data["pages"][0]
-        page_title = page.get("title", "")
-        page_url = page.get("url", "")
+        search_results = search_data["query"]["search"]
+        page_title = search_results[0].get("title", "")
         
-        # Get the page content
-        content_url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{page_title.replace(' ', '_')}"
+        # Get the page content using the correct endpoint
+        content_url = "https://en.wikipedia.org/api/rest_v1/page/summary/" + page_title.replace(" ", "_")
         content_response = requests.get(content_url, headers=headers, timeout=10)
         content_response.raise_for_status()
         content_data = content_response.json()
@@ -69,11 +75,14 @@ def perform_wikipedia_search(query: str) -> Dict[str, Any]:
         # Format the results
         formatted_answer = f"Title: {title}\n\n{summary}"
         
-        results = [{
-            "title": title,
-            "url": page_url,
-            "content": summary
-        }]
+        # Create results list with more detailed information
+        results = []
+        for result in search_results[:5]:  # Top 5 results
+            results.append({
+                "title": result.get("title", ""),
+                "url": f"https://en.wikipedia.org/wiki/{result.get('title', '').replace(' ', '_')}",
+                "content": result.get("snippet", "")  # Snippet is a short excerpt
+            })
         
         logger.info(f"Successfully retrieved Wikipedia content for: {query}")
         
