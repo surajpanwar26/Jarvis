@@ -260,18 +260,25 @@ export const getLLMProvider = (): LLMProvider => {
   throw new Error("Missing API Key. Please add GOOGLE_API_KEY to your .env file.");
 };
 
-// --- Report Factory with Fallback Support ---
+// --- Report Factory with Aggressive Fallback Support ---
 export const getReportLLM = (): LLMProvider => {
-  // Create a fallback provider that tries multiple providers
-  return new FallbackProvider([
+  // Create a fallback provider that tries multiple providers with aggressive fallback
+  const providers = [
     hasKey(config.googleApiKey) ? new GeminiProvider(config.googleApiKey!) : null,
     hasKey(config.groqApiKey) ? new GroqProvider(config.groqApiKey!) : null,
     hasKey(config.huggingFaceApiKey) ? new HuggingFaceProvider(config.huggingFaceApiKey!) : null
-  ].filter(provider => provider !== null) as LLMProvider[]);
+  ].filter(provider => provider !== null) as LLMProvider[];
+  
+  // If no providers are available, return a special fallback provider
+  if (providers.length === 0) {
+    return new InstantFallbackProvider();
+  }
+  
+  return new AggressiveFallbackProvider(providers);
 };
 
-// --- Fallback Provider Implementation ---
-class FallbackProvider implements LLMProvider {
+// --- Aggressive Fallback Provider Implementation ---
+class AggressiveFallbackProvider implements LLMProvider {
   private providers: LLMProvider[];
   
   constructor(providers: LLMProvider[]) {
@@ -287,57 +294,64 @@ class FallbackProvider implements LLMProvider {
     
     for (let i = 0; i < this.providers.length; i++) {
       try {
-        console.log(`Attempting generation with provider ${i + 1}/${this.providers.length}`);
+        console.log(`[AGGRESSIVE FALLBACK] Attempting generation with provider ${i + 1}/${this.providers.length}`);
         const result = await this.providers[i].generate(params);
-        console.log(`Successfully generated content with provider ${i + 1}`);
-        return result;
+        
+        // Check if result is valid (not empty, not just whitespace)
+        if (result && result.trim().length > 0) {
+          console.log(`[AGGRESSIVE FALLBACK] Successfully generated content with provider ${i + 1}`);
+          return result;
+        } else {
+          console.warn(`[AGGRESSIVE FALLBACK] Provider ${i + 1} returned empty content`);
+          throw new Error(`Provider ${i + 1} returned empty content`);
+        }
       } catch (error: any) {
-        console.warn(`Provider ${i + 1} failed:`, error.message);
+        console.warn(`[AGGRESSIVE FALLBACK] Provider ${i + 1} failed:`, error.message);
         errors.push(`Provider ${i + 1}: ${error.message}`);
         
-        // If this is the last provider, re-throw the error
-        if (i === this.providers.length - 1) {
-          throw new Error(`All providers failed. Errors: ${errors.join('; ')}`);
-        }
-        
-        // Continue to next provider
-        console.log(`Falling back to next provider...`);
+        // Continue to next provider immediately
+        console.log(`[AGGRESSIVE FALLBACK] Falling back to next provider...`);
       }
     }
     
-    throw new Error(`All providers failed. Errors: ${errors.join('; ')}`);
+    // If all providers fail, throw a comprehensive error
+    throw new Error(`ALL PROVIDERS FAILED. Errors: ${errors.join('; ')}`);
   }
   
   async *generateStream(params: GenerationParams): AsyncGenerator<string, void, unknown> {
-    if (this.providers.length === 0) {
-      throw new Error("No providers available for fallback");
+    try {
+      const fullText = await this.generate(params);
+      yield fullText;
+    } catch (error) {
+      // If streaming fails, throw the error to trigger fallback
+      throw error;
     }
+  }
+}
+
+// --- Instant Fallback Provider for When No Providers Are Available ---
+class InstantFallbackProvider implements LLMProvider {
+  async generate(params: GenerationParams): Promise<string> {
+    console.log("[INSTANT FALLBACK] No API keys configured, returning immediate fallback response");
     
-    const errors: string[] = [];
-    
-    for (let i = 0; i < this.providers.length; i++) {
-      try {
-        console.log(`Attempting stream generation with provider ${i + 1}/${this.providers.length}`);
-        const stream = this.providers[i].generateStream(params);
-        for await (const chunk of stream) {
-          yield chunk;
-        }
-        console.log(`Successfully streamed content with provider ${i + 1}`);
-        return;
-      } catch (error: any) {
-        console.warn(`Provider ${i + 1} failed:`, error.message);
-        errors.push(`Provider ${i + 1}: ${error.message}`);
-        
-        // If this is the last provider, re-throw the error
-        if (i === this.providers.length - 1) {
-          throw new Error(`All providers failed. Errors: ${errors.join('; ')}`);
-        }
-        
-        // Continue to next provider
-        console.log(`Falling back to next provider...`);
-      }
-    }
-    
-    throw new Error(`All providers failed. Errors: ${errors.join('; ')}`);
+    return `# Report Generation Notice
+
+Due to temporary technical limitations, this report was generated using an immediate fallback mechanism.
+
+## Topic: ${params.prompt.split(':')[0] || 'Requested Topic'}
+
+This is a placeholder response because no LLM providers are currently configured or accessible. In a properly configured environment, this would contain detailed information about your requested topic.
+
+To enable full functionality:
+1. Add your API keys to the .env file
+2. Ensure network connectivity to the LLM providers
+3. Restart the application
+
+*This is an automated fallback response.*`;
+  }
+  
+  async *generateStream(params: GenerationParams): AsyncGenerator<string, void, unknown> {
+    const text = await this.generate(params);
+    yield text;
   }
 }
