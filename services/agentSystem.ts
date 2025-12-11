@@ -301,8 +301,11 @@ Ensure the report is well-organized and professionally formatted using proper Ma
       // Detailed error message in UI
       const errDetail = e.message || JSON.stringify(e);
       
-      // Check if this is a fallback response
-      if (errDetail.includes('fallback') || errDetail.includes('Fallback')) {
+      // Check if this is a fallback response or API limitation
+      if (errDetail.includes('fallback') || errDetail.includes('Fallback') || 
+          errDetail.includes('API Limit') || errDetail.includes('quota') || 
+          errDetail.includes('limit') || errDetail.includes('failed') ||
+          errDetail.includes('All providers failed')) {
         this.emit({ 
           type: 'agent_action', 
           agentName: 'Writer', 
@@ -310,7 +313,36 @@ Ensure the report is well-organized and professionally formatted using proper Ma
           timestamp: new Date() 
         });
         
-        // Return a graceful fallback response
+        // Try one more time with a simplified prompt to increase chances of success
+        try {
+          const llm = getReportLLM();
+          const simplifiedPrompt = `Create a concise report on "${state.topic}" based on the following context:
+          
+${state.context.slice(0, 3).join('\n\n')}
+
+Provide a brief summary with key points and main findings. Format as Markdown with clear headings.`;
+          
+          const fallbackReport = await llm.generate({
+            prompt: simplifiedPrompt,
+            systemInstruction: "You are an AI assistant creating a concise report. Focus on clarity and key information.",
+            jsonMode: false
+          });
+          
+          if (fallbackReport && fallbackReport.length > 0) {
+            this.emit({ 
+              type: 'agent_action', 
+              agentName: 'Writer', 
+              message: 'Successfully generated simplified report using fallback provider.', 
+              timestamp: new Date() 
+            });
+            
+            return { ...state, report: fallbackReport };
+          }
+        } catch (fallbackError) {
+          console.error("Fallback generation also failed:", fallbackError);
+        }
+        
+        // If fallback also fails, return a graceful fallback response
         const fallbackReport = `# Report Generation Notice
 
 Due to temporary API limitations, this report was generated using a fallback mechanism. The content may be less detailed than usual.
@@ -326,11 +358,25 @@ ${errDetail.includes('brief overview') ? errDetail.split('brief overview')[1] : 
         return { ...state, report: fallbackReport };
       } else {
         this.emit({ type: 'error', message: `Drafting failed: ${errDetail}`, timestamp: new Date() });
-        return { ...state, report: `**Report Generation Failed**
+        // Even if there's an error, we should still try to provide some content to the user
+        // rather than completely failing
+        const errorReport = `# Report Generation Failed
 
-Error: ${errDetail}
+We encountered an issue while generating your report:
 
-Please check API keys and try again.` };
+**Error Details**: ${errDetail}
+
+## Possible Solutions:
+1. Check your API key configurations in the environment variables
+2. Verify network connectivity to the API providers
+3. Try again in a few minutes if this is a temporary issue
+4. If the problem persists, consider using alternative API providers
+
+## Topic: ${state.topic}
+
+This is a placeholder report due to generation failure. Please try again later for a complete report.`;
+
+        return { ...state, report: errorReport };
       }
     }
   }

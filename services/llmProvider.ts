@@ -28,6 +28,10 @@ class HuggingFaceProvider implements LLMProvider {
   }
 
   async generate(params: GenerationParams): Promise<string> {
+    // Optimize token usage based on request type
+    const isReportGeneration = params.prompt.toLowerCase().includes("report") || 
+                              (params.systemInstruction && params.systemInstruction.toLowerCase().includes("report"));
+    
     try {
       const response = await fetch(this.baseUrl, {
         method: "POST",
@@ -37,19 +41,28 @@ class HuggingFaceProvider implements LLMProvider {
         body: JSON.stringify({
           prompt: params.prompt,
           systemInstruction: params.systemInstruction,
-          provider: "huggingface",
-          jsonMode: params.jsonMode
+          maxTokens: isReportGeneration ? 2048 : 1024,
+          jsonMode: params.jsonMode,
+          provider: "huggingface" // Specify provider for backend routing
         })
       });
 
       if (!response.ok) {
-        throw new Error(`HuggingFace API Error: ${response.statusText}`);
+        const errorText = await response.text();
+        throw new Error(`HuggingFace API Error: ${response.status} - ${errorText}`);
       }
       
       const data = await response.json();
+      // Check if this is a fallback response and handle appropriately
+      if (data.provider === "Fallback") {
+        console.warn("HuggingFace provider fell back to fallback response");
+        // Return the fallback content but don't throw an error
+        return data.content || data.result || "";
+      }
       return data.result || data.content || "";
     } catch (error) {
       console.error("HuggingFace Generation Failed:", error);
+      // Re-throw the error to allow proper fallback handling
       throw error;
     }
   }
@@ -67,7 +80,7 @@ class HuggingFaceProvider implements LLMProvider {
 // --- 2. Groq Implementation (Optional High Speed) ---
 class GroqProvider implements LLMProvider {
   private apiKey: string;
-  // Use the backend endpoint for Groq
+  // Use the backend endpoint for Groq instead of direct API calls
   private baseUrl = "/api/llm/generate";
 
   constructor(apiKey: string) {
@@ -90,13 +103,21 @@ class GroqProvider implements LLMProvider {
       });
 
       if (!response.ok) {
-        throw new Error(`Groq API Error: ${response.statusText}`);
+        const errorText = await response.text();
+        throw new Error(`Groq API Error: ${response.status} - ${errorText}`);
       }
       
       const data = await response.json();
+      // Check if this is a fallback response and handle appropriately
+      if (data.provider === "Fallback") {
+        console.warn("Groq provider fell back to fallback response");
+        // Return the fallback content but don't throw an error
+        return data.content || data.result || "";
+      }
       return data.result || data.content || "";
     } catch (error) {
       console.error("Groq Generation Failed:", error);
+      // Re-throw the error to allow proper fallback handling
       throw error;
     }
   }
@@ -114,7 +135,6 @@ class GroqProvider implements LLMProvider {
 // --- 3. Google Gemini Implementation (PRIMARY) ---
 class GeminiProvider implements LLMProvider {
   private apiKey: string;
-  private model = getEnv('GEMINI_MODEL') || "gemini-2.5-flash";
 
   constructor(apiKey: string) {
     this.apiKey = apiKey;
@@ -123,16 +143,17 @@ class GeminiProvider implements LLMProvider {
   async generate(params: GenerationParams): Promise<string> {
     try {
       // Instead of making direct calls to Google API, use our backend endpoint
-      const response = await fetch(getApiUrl('/api/llm/generate'), {
+      const response = await fetch("/api/llm/generate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
           prompt: params.prompt,
-          system_instruction: params.systemInstruction,
-          json_mode: params.jsonMode,
-          thinking_budget: params.thinkingBudget
+          systemInstruction: params.systemInstruction,
+          provider: "gemini",
+          jsonMode: params.jsonMode,
+          thinkingBudget: params.thinkingBudget
         })
       });
       
@@ -146,6 +167,12 @@ class GeminiProvider implements LLMProvider {
       }
       
       const data = await response.json();
+      // Check if this is a fallback response and handle appropriately
+      if (data.provider === "Fallback") {
+        console.warn("Gemini provider fell back to fallback response");
+        // Return the fallback content but don't throw an error
+        return data.content || "";
+      }
       return data.content || "";
     } catch (e: any) {
       console.error("Gemini Generation Failed:", e.message);
@@ -153,6 +180,7 @@ class GeminiProvider implements LLMProvider {
       if (e.message.includes('API Limit Reached') || e.message.includes('quota') || e.message.includes('limit')) {
         throw new Error(`Google API Limit Reached. Please wait for quota reset or use alternative providers.`);
       }
+      // Re-throw the error to allow proper fallback handling
       throw new Error(`Gemini Generation Failed: ${e.message}`);
     }
   }
@@ -187,7 +215,84 @@ export const getLLMProvider = (): LLMProvider => {
   throw new Error("Missing API Key. Please add GOOGLE_API_KEY to your .env file.");
 };
 
-// --- Report Factory (Strict Priority: Gemini -> HF) ---
+// --- Report Factory with Fallback Support ---
 export const getReportLLM = (): LLMProvider => {
-  return getLLMProvider(); 
+  // Create a fallback provider that tries multiple providers
+  return new FallbackProvider([
+    hasKey(config.googleApiKey) ? new GeminiProvider(config.googleApiKey!) : null,
+    hasKey(config.groqApiKey) ? new GroqProvider(config.groqApiKey!) : null,
+    hasKey(config.huggingFaceApiKey) ? new HuggingFaceProvider(config.huggingFaceApiKey!) : null
+  ].filter(provider => provider !== null) as LLMProvider[]);
 };
+
+// --- Fallback Provider Implementation ---
+class FallbackProvider implements LLMProvider {
+  private providers: LLMProvider[];
+  
+  constructor(providers: LLMProvider[]) {
+    this.providers = providers;
+  }
+  
+  async generate(params: GenerationParams): Promise<string> {
+    if (this.providers.length === 0) {
+      throw new Error("No providers available for fallback");
+    }
+    
+    const errors: string[] = [];
+    
+    for (let i = 0; i < this.providers.length; i++) {
+      try {
+        console.log(`Attempting generation with provider ${i + 1}/${this.providers.length}`);
+        const result = await this.providers[i].generate(params);
+        console.log(`Successfully generated content with provider ${i + 1}`);
+        return result;
+      } catch (error: any) {
+        console.warn(`Provider ${i + 1} failed:`, error.message);
+        errors.push(`Provider ${i + 1}: ${error.message}`);
+        
+        // If this is the last provider, re-throw the error
+        if (i === this.providers.length - 1) {
+          throw new Error(`All providers failed. Errors: ${errors.join('; ')}`);
+        }
+        
+        // Continue to next provider
+        console.log(`Falling back to next provider...`);
+      }
+    }
+    
+    throw new Error(`All providers failed. Errors: ${errors.join('; ')}`);
+  }
+  
+  async *generateStream(params: GenerationParams): AsyncGenerator<string, void, unknown> {
+    if (this.providers.length === 0) {
+      throw new Error("No providers available for fallback");
+    }
+    
+    const errors: string[] = [];
+    
+    for (let i = 0; i < this.providers.length; i++) {
+      try {
+        console.log(`Attempting stream generation with provider ${i + 1}/${this.providers.length}`);
+        const stream = this.providers[i].generateStream(params);
+        for await (const chunk of stream) {
+          yield chunk;
+        }
+        console.log(`Successfully streamed content with provider ${i + 1}`);
+        return;
+      } catch (error: any) {
+        console.warn(`Provider ${i + 1} failed:`, error.message);
+        errors.push(`Provider ${i + 1}: ${error.message}`);
+        
+        // If this is the last provider, re-throw the error
+        if (i === this.providers.length - 1) {
+          throw new Error(`All providers failed. Errors: ${errors.join('; ')}`);
+        }
+        
+        // Continue to next provider
+        console.log(`Falling back to next provider...`);
+      }
+    }
+    
+    throw new Error(`All providers failed. Errors: ${errors.join('; ')}`);
+  }
+}
