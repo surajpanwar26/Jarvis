@@ -174,10 +174,13 @@ async def login_via_google(request: Request):
     else:
         print(f"Using explicit redirect URI: {redirect_uri}")
     
-    # Validate that the redirect URI matches what's expected
-    expected_redirect_uri = "https://jarvis-backend-nzcg.onrender.com/api/auth/google/callback"
-    if redirect_uri != expected_redirect_uri:
-        print(f"WARNING: Redirect URI mismatch! Expected: {expected_redirect_uri}, Got: {redirect_uri}")
+    # For local development, we need to make sure the redirect URI is correct
+    if not is_production and not os.getenv("GOOGLE_REDIRECT_URI"):
+        # In local development, use the backend port for callback
+        expected_local_redirect = f"http://localhost:{os.getenv('PORT', '8002')}/api/auth/google/callback"
+        if redirect_uri != expected_local_redirect:
+            print(f"WARNING: Local redirect URI mismatch! Expected: {expected_local_redirect}, Got: {redirect_uri}")
+            redirect_uri = expected_local_redirect
     
     try:
         # Force account selection by adding prompt parameter
@@ -262,7 +265,9 @@ async def auth_via_google(request: Request):
             redirect_url = "https://jarvis-l8gx.onrender.com"
         else:
             # Redirect to development frontend
-            redirect_url = origin or referer or f"http://localhost:{os.getenv('FRONTEND_PORT', '5173')}"
+            # Use the FRONTEND_PORT environment variable or default to 5173
+            frontend_port = os.getenv('FRONTEND_PORT', '5173')
+            redirect_url = origin or referer or f"http://localhost:{frontend_port}"
         
         print(f"Redirecting user to: {redirect_url}")
         
