@@ -143,8 +143,8 @@ async def login_via_google(request: Request):
         # Use the production frontend URL
         redirect_uri = "https://jarvis-l8gx.onrender.com/api/auth/callback"
     else:
-        # Use environment variable for redirect URI with fallback to localhost
-        redirect_uri = os.getenv("GOOGLE_REDIRECT_URI", f"http://localhost:{os.getenv('PORT', '8002')}/api/auth/callback")
+        # Use environment variable for redirect URI with fallback to localhost frontend port
+        redirect_uri = os.getenv("GOOGLE_REDIRECT_URI", f"http://localhost:{os.getenv('FRONTEND_PORT', '5173')}/api/auth/callback")
     
     # Force account selection by adding prompt parameter
     return await oauth.google.authorize_redirect(
