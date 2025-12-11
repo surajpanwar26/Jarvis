@@ -153,6 +153,9 @@ async def login_via_google(request: Request):
     
     print(f"OAuth login request - Host: {host}, Origin: {origin}, Referer: {referer}")
     
+    # Determine if this is a production environment
+    is_production = "jarvis-backend-nzcg.onrender.com" in host
+    
     # Determine the correct redirect URI based on environment variables or request origin
     # Check if we have an explicit redirect URI set in environment variables (highest priority)
     redirect_uri = os.getenv("GOOGLE_REDIRECT_URI")
@@ -161,8 +164,6 @@ async def login_via_google(request: Request):
     
     if not redirect_uri:
         # If no explicit redirect URI, determine based on environment
-        is_production = "jarvis-backend-nzcg.onrender.com" in host
-        
         if is_production:
             # Use the production backend URL to match Google Console configuration
             redirect_uri = "https://jarvis-backend-nzcg.onrender.com/api/auth/google/callback"
@@ -175,7 +176,7 @@ async def login_via_google(request: Request):
         print(f"Using explicit redirect URI: {redirect_uri}")
     
     # For local development, we need to make sure the redirect URI is correct
-    if not is_production and not os.getenv("GOOGLE_REDIRECT_URI"):
+    if not is_production:
         # In local development, use the backend port for callback
         expected_local_redirect = f"http://localhost:{os.getenv('PORT', '8002')}/api/auth/google/callback"
         if redirect_uri != expected_local_redirect:
@@ -272,7 +273,7 @@ async def auth_via_google(request: Request):
         print(f"Redirecting user to: {redirect_url}")
         
         # Return HTML that communicates with parent window and redirects
-        html_content = f"""
+        html_content = """
         <!DOCTYPE html>
         <html>
         <head>
@@ -281,20 +282,20 @@ async def auth_via_google(request: Request):
         <body>
             <script>
                 // Store token and email in localStorage
-                localStorage.setItem('authToken', '{access_token}');
-                localStorage.setItem('jarvis_user_email', '{user["email"]}');
+                localStorage.setItem('authToken', '""" + access_token + """');
+                localStorage.setItem('jarvis_user_email', '""" + user["email"] + """');
                 
                 // Communicate with parent window if this is a popup
-                if (window.opener) {{
-                    window.opener.postMessage({{
+                if (window.opener) {
+                    window.opener.postMessage({
                         type: 'oauth-success',
-                        token: '{access_token}'
-                    }}, '*');
+                        token: '""" + access_token + """'
+                    }, '*');
                     window.close();
-                }} else {{
+                } else {
                     // Redirect to main application
-                    window.location.href = '{redirect_url}';
-                }}
+                    window.location.href = '""" + redirect_url + """';
+                }
             </script>
             <p>Authentication successful. Redirecting...</p>
         </body>
