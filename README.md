@@ -57,10 +57,10 @@ JARVIS is an advanced AI research assistant that leverages multiple specialized 
    - Create a new OAuth 2.0 Client ID
    - For local development, add these URIs:
      - Authorized JavaScript origins: `http://localhost:5173`
-     - Authorized redirect URIs: `http://localhost:8002/api/auth/callback`
+     - Authorized redirect URIs: `http://localhost:5173/api/auth/callback`
    - For production deployment, add these URIs:
-     - Authorized JavaScript origins: `https://your-frontend-url.onrender.com`
-     - Authorized redirect URIs: `https://your-frontend-url.onrender.com/api/auth/callback`
+     - Authorized JavaScript origins: `https://jarvis-l8gx.onrender.com`
+     - Authorized redirect URIs: `https://jarvis-l8gx.onrender.com/api/auth/callback`
    - Copy the Client ID and Client Secret to your `.env` file
 
 4. Create a `.env` file in the root directory with the following variables:
