@@ -20,7 +20,9 @@ interface LLMProvider {
 // --- 1. Hugging Face Implementation (Fallback) ---
 class HuggingFaceProvider implements LLMProvider {
   private apiKey: string;
-  private baseUrl = getEnv('HUGGINGFACE_API_URL') || "https://api-inference.huggingface.co/models/Qwen/Qwen2.5-7B-Instruct";  constructor(apiKey: string) {
+  private baseUrl = getEnv('HUGGINGFACE_API_URL') || "https://router.huggingface.co/models/Qwen/Qwen2.5-7B-Instruct";  // Updated to use router endpoint
+
+  constructor(apiKey: string) {
     this.apiKey = apiKey;
   }
 

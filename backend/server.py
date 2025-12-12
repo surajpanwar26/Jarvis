@@ -324,7 +324,7 @@ async def generate_llm_content_endpoint(request: LLMRequest):
         if hugging_face_api_key:
             providers.append({
                 "name": "Hugging Face",
-                "url": "https://api-inference.huggingface.co/models/Qwen/Qwen2.5-7B-Instruct",
+                "url": "https://router.huggingface.co/models/Qwen/Qwen2.5-7B-Instruct",
                 "payload": {
                     "inputs": f"<|user|>\n{request.system_instruction or 'You are a helpful assistant.'}\n\n{request.prompt}\n<|end|>\n<|assistant|>",
                     "parameters": {

@@ -74,7 +74,8 @@ def generate_llm_content(prompt: str, system_instruction: str = "", is_report: b
         for model_id in huggingface_models:
             providers.append({
                 "name": f"Hugging Face ({model_id})",
-                "url": f"https://api-inference.huggingface.co/models/{model_id}",                "payload": {
+                "url": f"https://router.huggingface.co/models/{model_id}",  # Updated to use router endpoint
+                "payload": {
                     "inputs": f"<|user|>\n{system_instruction or 'You are a helpful assistant.'}\n\n{prompt}\n<|end|>\n<|assistant|>",
                     "parameters": {
                         "max_new_tokens": 500 if not is_report else 1000,  # Reduce tokens for non-report generation
