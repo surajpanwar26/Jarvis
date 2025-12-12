@@ -1,31 +1,12 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { JarvisLogo } from '../components/Logo';
 import { GoogleIcon } from '../components/Icons';
-import { getApiBaseUrl } from '../services/config';
 
 interface LoginPageProps {
   onLogin: () => void;
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
-  useEffect(() => {
-    // Listen for OAuth success message from popup
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data.type === 'oauth-success') {
-        // Store the token and trigger login
-        localStorage.setItem('authToken', event.data.token);
-        onLogin();
-      }
-    };
-
-    window.addEventListener('message', handleMessage);
-    
-    // Cleanup listener on component unmount
-    return () => {
-      window.removeEventListener('message', handleMessage);
-    };
-  }, [onLogin]);
-
   const handleGoogleLogin = () => {
     // Open OAuth in a popup window instead of redirecting
     const width = 600;
@@ -33,10 +14,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     const left = window.screen.width / 2 - width / 2;
     const top = window.screen.height / 2 - height / 2;
     
-    // Use the proper API base URL
-    const apiUrl = getApiBaseUrl();
+    // Use environment variable for API URL with fallback to localhost
+    // @ts-ignore: ImportMeta.env is not properly typed in TypeScript
+    const apiUrl = import.meta.env?.VITE_API_URL || `http://localhost:${import.meta.env?.PORT || 8002}`;
     const popup = window.open(
-      `${apiUrl}/api/auth/google`,
+      `${apiUrl}/api/auth/login`,
       'Google Login',
       `width=${width},height=${height},top=${top},left=${left}`
     );

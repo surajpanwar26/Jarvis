@@ -31,8 +31,7 @@ oauth.register(
     server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
     client_kwargs={
         'scope': 'openid email profile'
-    },
-    redirect_uri=os.getenv('GOOGLE_REDIRECT_URI')
+    }
 )
 
 # Create router
@@ -169,8 +168,8 @@ async def login_via_google(request: Request):
             # Use the production backend URL to match Google Console configuration
             redirect_uri = "https://jarvis-backend-nzcg.onrender.com/api/auth/google/callback"
         else:
-            # Use localhost backend port - matching Google Console configuration
-            redirect_uri = "http://localhost:8002/api/auth/google/callback"
+            # Use localhost backend port
+            redirect_uri = f"http://localhost:{os.getenv('PORT', '8002')}/api/auth/google/callback"
         
         print(f"Generated redirect URI: {redirect_uri}")
     else:
@@ -285,12 +284,10 @@ async def auth_via_google(request: Request):
                 
                 // Communicate with parent window if this is a popup
                 if (window.opener) {
-                    // Post message to parent with specific origin for security
-                    const origin = window.location.origin.includes('localhost') ? 'http://localhost:5173' : 'https://jarvis-l8gx.onrender.com';
                     window.opener.postMessage({
                         type: 'oauth-success',
                         token: '""" + access_token + """'
-                    }, origin);
+                    }, '*');
                     window.close();
                 } else {
                     // Redirect to main application
