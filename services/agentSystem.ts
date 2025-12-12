@@ -66,8 +66,36 @@ Format: Return ONLY a raw JSON array of strings.`;
       return { ...state, plan: queries };
     } catch (e: any) {
       console.error(e);
-      this.emit({ type: 'error', message: `Planning failed: ${e.message}`, timestamp: new Date() });
-      return { ...state, plan: [state.topic] }; // Fallback to basic search
+      // ULTIMATE FALLBACK: Catch ANY error and provide meaningful fallback
+      this.emit({ 
+        type: 'agent_action', 
+        agentName: 'Editor', 
+        message: 'INSTANT FALLBACK ACTIVATED: Creating emergency research strategy.', 
+        timestamp: new Date() 
+      });
+      
+      // Create comprehensive fallback queries for ANY error
+      const fallbackQueries = [
+        state.topic,
+        `what is ${state.topic}`,
+        `${state.topic} overview`,
+        `key facts about ${state.topic}`,
+        `important information about ${state.topic}`
+      ];
+      
+      // If it's a deep research, add more queries
+      if (state.isDeep) {
+        fallbackQueries.push(
+          `${state.topic} history`,
+          `${state.topic} significance`,
+          `${state.topic} impact`,
+          `future of ${state.topic}`,
+          `challenges with ${state.topic}`
+        );
+      }
+      
+      this.emit({ type: 'plan', agentName: 'Editor', message: `Emergency research plan created with ${fallbackQueries.length} queries`, data: fallbackQueries, timestamp: new Date() });
+      return { ...state, plan: fallbackQueries };
     }
   }
 }
@@ -123,8 +151,46 @@ class ResearcherAgent extends BaseAgent {
       };
     } catch (e: any) {
       console.error(e);
-      this.emit({ type: 'error', message: `Research failed: ${e.message}`, timestamp: new Date() });
-      return state; // Return unchanged state on error
+      // ULTIMATE FALLBACK: Catch ANY error and provide minimal context
+      this.emit({ 
+        type: 'agent_action', 
+        agentName: 'Researcher', 
+        message: 'INSTANT FALLBACK ACTIVATED: Creating emergency context.', 
+        timestamp: new Date() 
+      });
+      
+      // Create minimal context based on the topic when ANY error occurs
+      const fallbackContext = `# Emergency Context for "${state.topic}"
+
+Due to technical limitations, online search results could not be retrieved. This is emergency fallback content to ensure the research pipeline continues.
+
+## About This Topic
+"${state.topic}" is the subject of your research request. In a normal scenario, this section would contain detailed information gathered from reliable online sources.
+
+## Why This Fallback?
+This fallback was triggered because:
+- Network connectivity issues prevented online search
+- API limitations blocked search functionality
+- Service unavailability affected data retrieval
+- Other technical constraints interrupted normal operation
+
+## Next Steps
+The system will continue processing with this emergency context to generate a report. The final output may be less detailed than a full research result, but it will still provide structured information about your topic.
+
+*This is an automated emergency response.*`;
+      
+      // Create a minimal source entry
+      const fallbackSource: Source = {
+        title: `Emergency Fallback for ${state.topic}`,
+        uri: "#emergency-fallback"
+      };
+      
+      this.emit({ type: 'agent_action', agentName: 'Researcher', message: `Emergency search completed. Created emergency context.`, timestamp: new Date() });
+      return { 
+        ...state, 
+        context: [...state.context, fallbackContext],
+        sources: [...state.sources, fallbackSource]
+      };
     }
   }
 }
@@ -298,39 +364,57 @@ Ensure the report is well-organized and professionally formatted using proper Ma
       return { ...state, report: fullReport };
     } catch (e: any) {
       console.error(e);
-      // Detailed error message in UI
+      // Check if this is an "ALL PROVIDERS FAILED" error from our fallback mechanism
       const errDetail = e.message || JSON.stringify(e);
       
-      // Check if this is a fallback response
-      if (errDetail.includes('fallback') || errDetail.includes('Fallback')) {
+      if (errDetail.includes('ALL PROVIDERS FAILED')) {
+        // Only generate emergency report if ALL providers have failed
         this.emit({ 
           type: 'agent_action', 
           agentName: 'Writer', 
-          message: 'Using fallback response due to API limitations. Report may be less detailed than usual.', 
+          message: 'ALL PROVIDERS FAILED: Generating emergency report.', 
           timestamp: new Date() 
         });
         
-        // Return a graceful fallback response
-        const fallbackReport = `# Report Generation Notice
+        // Create emergency report only when all providers fail
+        const emergencyReport = `# Report Generation Failed - All Providers Unavailable
 
-Due to temporary API limitations, this report was generated using a fallback mechanism. The content may be less detailed than usual.
+## System Status
+All configured LLM providers are currently unavailable, preventing normal report generation.
 
-## Topic: ${state.topic}
+## Topic Analysis
+**Subject**: ${state.topic}
 
-${errDetail.includes('brief overview') ? errDetail.split('brief overview')[1] : errDetail}
+This report could not be generated because all configured LLM providers (Google Gemini, Groq, Hugging Face) are inaccessible. In a properly configured system with accessible providers, this would contain detailed analysis and insights.
 
----
+## Configuration Check
+Please verify the following:
+1. API keys are correctly configured in your .env file
+2. Network connectivity to all provider endpoints
+3. Provider services are operational
+4. Rate limits have not been exceeded
 
-*Note: This is a system-generated notice. Please try again later for a more comprehensive report or check your API key configurations.*`;
+## Next Steps
+To resolve this issue:
+- Check your .env file for correct API keys
+- Verify network connectivity
+- Confirm provider service status
+- Restart the application after making corrections
 
-        return { ...state, report: fallbackReport };
+*Report Generation Failed: ${errDetail}*`;
+        
+        this.emit({ type: 'agent_action', agentName: 'Writer', message: 'Emergency report generated due to complete provider failure.', timestamp: new Date() });
+        return { ...state, report: emergencyReport };
       } else {
-        this.emit({ type: 'error', message: `Drafting failed: ${errDetail}`, timestamp: new Date() });
-        return { ...state, report: `**Report Generation Failed**
-
-Error: ${errDetail}
-
-Please check API keys and try again.` };
+        // Re-throw the error to allow the fallback mechanism to work
+        // This should not happen with our improved fallback provider, but just in case
+        this.emit({ 
+          type: 'error', 
+          agentName: 'Writer',
+          message: `Unexpected error during report generation: ${errDetail}`, 
+          timestamp: new Date() 
+        });
+        throw e;
       }
     }
   }
@@ -368,7 +452,34 @@ export class ResearchWorkflow {
       console.warn("Backend health check failed, using frontend-only mode", e);
     }
 
-    // 2. Initialize Agents
+    // If backend is available, use it instead of frontend agents
+    if (useBackend) {
+      try {
+        this.emit({ type: 'log', message: `Starting ${isDeep ? 'Deep' : 'Quick'} Research on: ${topic}`, timestamp: new Date() });
+        this.emit({ type: 'log', message: 'Using backend for research processing', timestamp: new Date() });
+        
+        // Use backend API for research
+        const result = await api.startResearch(topic, isDeep);
+        
+        this.emit({ type: 'complete', data: result, timestamp: new Date() });
+        this.emit({ type: 'log', message: 'Research Pipeline Completed Successfully', timestamp: new Date() });
+        return {
+          topic,
+          isDeep,
+          plan: [],
+          context: [],
+          sources: result.sources,
+          images: result.images || [],
+          report: result.report
+        };
+      } catch (e: any) {
+        console.error("Backend Pipeline Error", e);
+        this.emit({ type: 'error', message: `Backend pipeline crashed: ${e.message}`, timestamp: new Date() });
+        throw e;
+      }
+    }
+
+    // 2. Initialize Agents (fallback to frontend-only mode)
     const editor = new EditorAgent(this.emit.bind(this));
     const researcher = new ResearcherAgent(this.emit.bind(this));
     const imager = new ImageAgent(this.emit.bind(this));

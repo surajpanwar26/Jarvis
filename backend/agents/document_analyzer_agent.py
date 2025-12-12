@@ -3,83 +3,74 @@ import os
 from typing import Dict, Any
 from .base_agent import BaseAgent
 from ..utils import logger
+from ..llm_utils import generate_llm_content
 
 class DocumentAnalyzerAgent(BaseAgent):
-    """Agent responsible for analyzing documents using Google Gemini"""
+    """Agent responsible for analyzing documents using multiple LLM providers with fallback support"""
     
     def __init__(self):
         super().__init__("Document Analyzer")
         self.google_api_key = os.getenv("GOOGLE_API_KEY")
     
     async def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        """Analyze document using Google Gemini"""
+        """Analyze document using LLM providers with fallback support"""
         file_base64 = state.get("file_base64", "")
         mime_type = state.get("mime_type", "text/plain")
         
         logger.info(f"[{self.name}] Analyzing document with MIME type: {mime_type}")
         
-        if not self.google_api_key:
-            raise Exception("GOOGLE_API_KEY not configured")
-        
         if not file_base64:
             raise Exception("No document content provided")
         
-        # Analyze document using Google Gemini
-        analysis_result = self._analyze_document_with_gemini(file_base64, mime_type)
-        
-        logger.info(f"[{self.name}] Document analysis completed")
-        
-        # Update state
-        state["report"] = analysis_result
-        state["sources"] = [{"title": "Uploaded Document", "uri": "#local-file"}]
-        state["images"] = []
-        
-        return state
-    
-    def _analyze_document_with_gemini(self, file_base64: str, mime_type: str) -> str:
-        """Analyze document using Google Gemini API with comprehensive fallback support"""
+        # Analyze document using improved LLM utility with fallback support
         try:
-            # First try: Direct Gemini API call
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={self.google_api_key}"
+            analysis_result = self._analyze_document_with_llm(file_base64, mime_type)
             
-            payload = {
-                "contents": [{
-                    "parts": [
-                        {"inlineData": {"mimeType": mime_type, "data": file_base64}},
-                        {"text": "Analyze this document and provide a comprehensive, meaningful summary of its contents. Focus on the key points, main ideas, and important details. Structure your response with clear sections: Executive Summary, Key Topics Covered, Main Arguments or Points, Significant Details, and Conclusion. Avoid technical jargon and provide an accessible explanation of what the document contains."}
-                    ]
-                }],
-                "generationConfig": {
-                    "temperature": 0.7,
-                    "maxOutputTokens": 4096
-                }
-            }
+            # Check if we got a fallback response and treat it as a valid response
+            # but log that we're using fallback content
+            if analysis_result.get("provider") == "Fallback":
+                logger.warning(f"[{self.name}] Using fallback response due to LLM failures")
             
-            response = requests.post(url, json=payload)
-            response.raise_for_status()
-            result = response.json()
-            return result["candidates"][0]["content"]["parts"][0]["text"]
+            logger.info(f"[{self.name}] Document analysis completed using {analysis_result.get('provider', 'Unknown')}")
             
-        except Exception as primary_error:
-            logger.error(f"[{self.name}] Primary Gemini document analysis failed: {str(primary_error)}")
+            # Update state
+            state["report"] = analysis_result.get("content", "")
+            state["sources"] = [{"title": "Uploaded Document", "uri": "#local-file"}]
+            state["images"] = []
             
-            # Check if it's a rate limit error
-            error_str = str(primary_error).lower()
-            is_rate_limit = "429" in error_str or "too many requests" in error_str or "quota" in error_str
+            return state
+        except Exception as e:
+            logger.error(f"[{self.name}] Document analysis failed: {str(e)}")
+            # Re-raise to trigger the next fallback in the chain
+            raise Exception(f"Document analysis failed: {str(e)}")
+    
+    def _analyze_document_with_llm(self, file_base64: str, mime_type: str) -> Dict[str, Any]:
+        """Analyze document using LLM providers with comprehensive fallback support"""
+        try:
+            # Use our enhanced LLM utility that handles multiple providers with fallback
+            prompt = f"""Analyze this document (MIME type: {mime_type}) and provide a comprehensive, meaningful summary of its contents. 
+            Focus on the key points, main ideas, and important details.
+            Structure your response with these sections:
+            1. EXECUTIVE SUMMARY: A clear overview of what the document is about
+            2. KEY TOPICS COVERED: The main subjects discussed
+            3. MAIN ARGUMENTS/POINTS: Core ideas or positions presented
+            4. SIGNIFICANT DETAILS: Important facts, figures, or examples
+            5. CONCLUSION: Overall takeaway from the document
             
-            if is_rate_limit:
-                # Try fallback with reduced tokens
-                logger.info(f"[{self.name}] Rate limit detected, trying fallback with reduced tokens")
-                try:
-                    payload["generationConfig"]["maxOutputTokens"] = 2048
-                    response = requests.post(url, json=payload)
-                    response.raise_for_status()
-                    result = response.json()
-                    return result["candidates"][0]["content"]["parts"][0]["text"]
-                except Exception as fallback_e:
-                    logger.error(f"[{self.name}] Reduced token fallback also failed: {str(fallback_e)}")
-                    
-            # If primary method failed or rate limit fallback failed, re-raise the original error
-            # This will trigger the Groq fallback in the chief agent
-            logger.info(f"[{self.name}] Primary method failed, triggering Groq fallback")
-            raise Exception(f"Document analysis failed. Primary method failed due to: {str(primary_error)}")
+            Provide a detailed, accessible explanation without technical jargon."""
+            
+            system_instruction = "You are a professional document analyst. Provide a thorough, insightful analysis of the document content."
+            
+            # Try to generate content using our improved LLM utility with fallback
+            result = generate_llm_content(
+                prompt=prompt,
+                system_instruction=system_instruction,
+                is_report=True
+            )
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"[{self.name}] LLM document analysis failed: {str(e)}")
+            # Re-raise to trigger the next fallback in the chain
+            raise Exception(f"LLM document analysis failed: {str(e)}")

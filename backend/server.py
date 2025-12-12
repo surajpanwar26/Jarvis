@@ -11,6 +11,10 @@ import asyncio
 import requests
 from requests.exceptions import Timeout
 
+# Load environment variables from .env file
+from dotenv import load_dotenv
+load_dotenv()
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,

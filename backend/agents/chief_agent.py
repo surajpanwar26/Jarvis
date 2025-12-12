@@ -37,45 +37,42 @@ class ChiefAgent(BaseAgent):
                 # For document analysis, try API-based first, then Groq, then local
                 logger.info(f"[{self.name}] Processing document analysis request")
                 try:
-                    # First try: Google Gemini
+                    # First try: Enhanced LLM-based document analyzer with fallback support
                     state = await self.document_analyzer.execute(state)
-                except Exception as gemini_error:
-                    logger.warning(f"[{self.name}] Google Gemini document analysis failed: {str(gemini_error)}")
+                    # If we get here, the analysis was successful (even if it used fallback)
+                    logger.info(f"[{self.name}] Document analysis completed successfully")
+                except Exception as llm_error:
+                    logger.warning(f"[{self.name}] LLM document analysis failed: {str(llm_error)}")
                     try:
-                        # Second try: Groq
-                        logger.info(f"[{self.name}] Falling back to Groq for document analysis")
-                        from ..llm_utils import generate_llm_content
-                        
-                        file_base64 = state.get("file_base64", "")
-                        mime_type = state.get("mime_type", "text/plain")
-                        
-                        prompt = f"""Analyze this document (MIME type: {mime_type}) and provide a comprehensive, meaningful summary of its contents. 
-                        Focus on the key points, main ideas, and important details.
-                        Structure your response with these sections:
-                        1. EXECUTIVE SUMMARY: A clear overview of what the document is about
-                        2. KEY TOPICS COVERED: The main subjects discussed
-                        3. MAIN ARGUMENTS/POINTS: Core ideas or positions presented
-                        4. SIGNIFICANT DETAILS: Important facts, figures, or examples
-                        5. CONCLUSION: Overall takeaway from the document
-                        
-                        Provide a detailed, accessible explanation without technical jargon."""
-                        
-                        system_instruction = "You are a professional document analyst. Provide a thorough, insightful analysis of the document content."
-                        
-                        result = generate_llm_content(
-                            prompt=prompt,
-                            system_instruction=system_instruction
-                        )
-                        
-                        # Update state with Groq results
-                        state["report"] = result.get("content", "Document analysis completed with Groq.")
-                        state["sources"] = [{"title": "Uploaded Document", "uri": "#local-file"}]
-                        state["images"] = []
-                        
-                    except Exception as groq_error:
-                        logger.warning(f"[{self.name}] Groq document analysis failed, falling back to local analysis: {str(groq_error)}")
-                        # Third try: Local document analyzer
+                        # Second try: Local document analyzer as final fallback
+                        logger.info(f"[{self.name}] Falling back to local document analysis")
                         state = await self.local_document_analyzer.execute(state)
+                    except Exception as local_error:
+                        logger.error(f"[{self.name}] All document analysis methods failed. LLM error: {str(llm_error)}, Local error: {str(local_error)}")
+                        # If all methods fail, provide a meaningful error message
+                        state["report"] = f"""# Document Analysis Failed
+
+## Error Details
+Unable to analyze the document due to technical issues:
+
+- LLM-based analysis error: {str(llm_error)}
+- Local analysis error: {str(local_error)}
+
+## Possible Solutions
+1. Check your internet connection
+2. Verify API keys are properly configured
+3. Try uploading a different document format
+4. Retry the analysis in a few minutes
+
+## Alternative Approach
+As a workaround, you can:
+1. Convert the document to plain text
+2. Use the Quick Research feature with key terms from your document
+3. Copy and paste document content directly into a research query
+
+We apologize for the inconvenience."""
+                        state["sources"] = [{"title": "Analysis Error", "uri": "#error"}]
+                        state["images"] = []
             else:
                 # For research requests, execute the full workflow
                 logger.info(f"[{self.name}] Processing research request")
