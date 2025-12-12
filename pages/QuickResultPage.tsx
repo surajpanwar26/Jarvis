@@ -197,7 +197,7 @@ export const QuickResultPage: React.FC<QuickResultPageProps> = ({ initialQuery, 
           <div className="flex-1 glass-card rounded-2xl border border-white/10 overflow-hidden flex flex-col shadow-2xl relative">
              {/* Report Header */}
              <div className="px-6 py-4 border-b border-white/10 bg-white/5 flex items-center justify-between">
-                <span className="text-xs font-bold text-amber-400 uppercase tracking-widest">Live Briefing</span>
+                <span className="text-xs font-bold text-amber-400 uppercase tracking-widest">Quick Summary</span>
                 {status === ResearchStatus.SEARCHING && <span className="text-xs text-slate-500 animate-pulse">Gathering Intel...</span>}
                 {status === ResearchStatus.SYNTHESIZING && <span className="text-xs text-slate-500 animate-pulse">Writing Brief...</span>}
              </div>

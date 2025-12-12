@@ -28,6 +28,10 @@ class HuggingFaceProvider implements LLMProvider {
   }
 
   async generate(params: GenerationParams): Promise<string> {
+    // Optimize token usage based on request type
+    const isReportGeneration = params.prompt.toLowerCase().includes("report") || 
+                              (params.systemInstruction && params.systemInstruction.toLowerCase().includes("report"));
+    
     try {
       const response = await fetch(this.baseUrl, {
         method: "POST",
@@ -37,7 +41,7 @@ class HuggingFaceProvider implements LLMProvider {
         body: JSON.stringify({
           prompt: params.prompt,
           systemInstruction: params.systemInstruction,
-          provider: "huggingface",
+          maxTokens: isReportGeneration ? 2048 : 1024,
           jsonMode: params.jsonMode
         })
       });
@@ -67,7 +71,7 @@ class HuggingFaceProvider implements LLMProvider {
 // --- 2. Groq Implementation (Optional High Speed) ---
 class GroqProvider implements LLMProvider {
   private apiKey: string;
-  // Use the backend endpoint for Groq
+  // Use the backend endpoint for Groq instead of direct API calls
   private baseUrl = "/api/llm/generate";
 
   constructor(apiKey: string) {
@@ -114,7 +118,6 @@ class GroqProvider implements LLMProvider {
 // --- 3. Google Gemini Implementation (PRIMARY) ---
 class GeminiProvider implements LLMProvider {
   private apiKey: string;
-  private model = getEnv('GEMINI_MODEL') || "gemini-2.5-flash";
 
   constructor(apiKey: string) {
     this.apiKey = apiKey;
@@ -123,16 +126,17 @@ class GeminiProvider implements LLMProvider {
   async generate(params: GenerationParams): Promise<string> {
     try {
       // Instead of making direct calls to Google API, use our backend endpoint
-      const response = await fetch(getApiUrl('/api/llm/generate'), {
+      const response = await fetch("/api/llm/generate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
           prompt: params.prompt,
-          system_instruction: params.systemInstruction,
-          json_mode: params.jsonMode,
-          thinking_budget: params.thinkingBudget
+          systemInstruction: params.systemInstruction,
+          provider: "gemini",
+          jsonMode: params.jsonMode,
+          thinkingBudget: params.thinkingBudget
         })
       });
       
