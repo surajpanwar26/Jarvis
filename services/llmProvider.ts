@@ -20,9 +20,7 @@ interface LLMProvider {
 // --- 1. Hugging Face Implementation (Fallback) ---
 class HuggingFaceProvider implements LLMProvider {
   private apiKey: string;
-  private baseUrl = getEnv('HUGGINGFACE_API_URL') || "https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3-8B-Instruct";
-
-  constructor(apiKey: string) {
+  private baseUrl = getEnv('HUGGINGFACE_API_URL') || "https://api-inference.huggingface.co/models/Qwen/Qwen2.5-7B-Instruct";  constructor(apiKey: string) {
     this.apiKey = apiKey;
   }
 
@@ -31,15 +29,13 @@ class HuggingFaceProvider implements LLMProvider {
     const isReportGeneration = params.prompt.toLowerCase().includes("report") || 
                               (params.systemInstruction && params.systemInstruction.toLowerCase().includes("report"));
     
-    const fullPrompt = `<|begin_of_text|><|start_header_id|>system<|end_header_id|>
+    const fullPrompt = `<|user|>
+${params.systemInstruction || "You are a helpful assistant."}${params.jsonMode ? " Output strict JSON only." : ""}
 
-${params.systemInstruction || "You are a helpful assistant."}${params.jsonMode ? " Output strict JSON only." : ""}<|eot_id|><|start_header_id|>user<|end_header_id|>
-
-${params.prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>
-
-`;
-
-    try {
+${params.prompt}
+<|end|>
+<|assistant|>
+`;    try {
       const response = await fetch(this.baseUrl, {
         method: "POST",
         headers: {

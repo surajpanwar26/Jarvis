@@ -25,7 +25,7 @@ def generate_llm_content(prompt: str, system_instruction: str = "", is_report: b
     if google_api_key:
         providers.append({
             "name": "Google Gemini",
-            "url": f"{os.getenv('GEMINI_API_URL', 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent')}?key={google_api_key}",
+            "url": f"{os.getenv('GEMINI_API_URL', 'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent')}?key={google_api_key}",
             "payload": {
                 "contents": [{
                     "parts": [{
@@ -64,19 +64,18 @@ def generate_llm_content(prompt: str, system_instruction: str = "", is_report: b
             }
         })
     
-    # 3. Hugging Face (deprioritized fallback)
+    # 3. Hugging Face (deprioritized fallback) - Use updated models
     hugging_face_api_key = os.getenv("HUGGINGFACE_API_KEY")
     if hugging_face_api_key:
-        # List of Hugging Face models to try in order of preference
-        huggingface_models = os.getenv("HUGGINGFACE_MODELS", "google/gemma-2-9b-it,microsoft/Phi-3-mini-4k-instruct,mistralai/Mistral-7B-Instruct-v0.3,HuggingFaceH4/zephyr-7b-beta,TinyLlama/TinyLlama-1.1B-Chat-v1.0").split(",")
+        # List of Hugging Face models to try in order of preference (updated working models)
+        huggingface_models = os.getenv("HUGGINGFACE_MODELS", "Qwen/Qwen2.5-7B-Instruct,google/gemma-2-9b-it,mistralai/Mistral-7B-Instruct-v0.3").split(",")
         
         # Try each model in order until one works
         for model_id in huggingface_models:
             providers.append({
                 "name": f"Hugging Face ({model_id})",
-                "url": f"{os.getenv('HUGGINGFACE_API_URL', 'https://router.huggingface.co/models')}/{model_id}",
-                "payload": {
-                    "inputs": f"{system_instruction or 'You are a helpful assistant.'}\n\n{prompt}",
+                "url": f"https://api-inference.huggingface.co/models/{model_id}",                "payload": {
+                    "inputs": f"<|user|>\n{system_instruction or 'You are a helpful assistant.'}\n\n{prompt}\n<|end|>\n<|assistant|>",
                     "parameters": {
                         "max_new_tokens": 500 if not is_report else 1000,  # Reduce tokens for non-report generation
                         "return_full_text": False,
@@ -87,8 +86,7 @@ def generate_llm_content(prompt: str, system_instruction: str = "", is_report: b
                     "Authorization": f"Bearer {hugging_face_api_key}",
                     "Content-Type": "application/json"
                 }
-            })
-    
+            })    
     if not providers:
         raise Exception("No API keys configured for LLM providers")
     

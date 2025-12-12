@@ -277,7 +277,7 @@ async def generate_llm_content_endpoint(request: LLMRequest):
         if google_api_key:
             providers.append({
                 "name": "Google Gemini",
-                "url": f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={google_api_key}",
+                "url": f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={google_api_key}",
                 "payload": {
                     "contents": [{
                         "parts": [{
@@ -319,14 +319,14 @@ async def generate_llm_content_endpoint(request: LLMRequest):
             if request.json_mode:
                 providers[-1]["payload"]["response_format"] = {"type": "json_object"}
         
-        # 3. Hugging Face (deprioritized fallback)
+        # 3. Hugging Face (deprioritized fallback) - Use updated working model
         hugging_face_api_key = os.getenv("HUGGINGFACE_API_KEY")
         if hugging_face_api_key:
             providers.append({
                 "name": "Hugging Face",
-                "url": "https://router.huggingface.co/models/Qwen/Qwen2.5-7B-Instruct",
+                "url": "https://api-inference.huggingface.co/models/Qwen/Qwen2.5-7B-Instruct",
                 "payload": {
-                    "inputs": f"{request.system_instruction or 'You are a helpful assistant.'}\n\n{request.prompt}",
+                    "inputs": f"<|user|>\n{request.system_instruction or 'You are a helpful assistant.'}\n\n{request.prompt}\n<|end|>\n<|assistant|>",
                     "parameters": {
                         "max_new_tokens": 500 if not is_report_generation else 1000,
                         "return_full_text": False,
@@ -337,8 +337,7 @@ async def generate_llm_content_endpoint(request: LLMRequest):
                     "Authorization": f"Bearer {hugging_face_api_key}",
                     "Content-Type": "application/json"
                 }
-            })
-        
+            })        
         if not providers:
             raise HTTPException(status_code=500, detail="No API keys configured for LLM providers")
         

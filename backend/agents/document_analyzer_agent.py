@@ -39,9 +39,8 @@ class DocumentAnalyzerAgent(BaseAgent):
     def _analyze_document_with_gemini(self, file_base64: str, mime_type: str) -> str:
         """Analyze document using Google Gemini API with comprehensive fallback support"""
         try:
-            # First try: Direct Gemini API call
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={self.google_api_key}"
-            
+            # First try: Direct Gemini API call with updated model
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={self.google_api_key}"            
             payload = {
                 "contents": [{
                     "parts": [
