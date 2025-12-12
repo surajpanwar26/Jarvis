@@ -53,6 +53,7 @@ Local analysis encountered an error: {str(e)}
 We're committed to providing analysis capabilities even when external services are unavailable."""
             state["sources"] = [{"title": "Local Analysis", "uri": "#local-file"}]
             state["images"] = []
+            # Return the state with the fallback report instead of re-raising the exception
             return state
     
     def _analyze_document_locally(self, file_base64: str, mime_type: str) -> str:
