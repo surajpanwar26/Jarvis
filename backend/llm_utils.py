@@ -25,7 +25,7 @@ def generate_llm_content(prompt: str, system_instruction: str = "", is_report: b
     if google_api_key and (provider is None or provider == "gemini"):
         providers.append({
             "name": "Google Gemini",
-            "url": f"{os.getenv('GEMINI_API_URL', 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent')}?key={google_api_key}",
+            "url": f"{os.getenv('GEMINI_API_URL', 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent')}?key={google_api_key}",
             "payload": {
                 "contents": [{
                     "parts": [{
@@ -50,7 +50,7 @@ def generate_llm_content(prompt: str, system_instruction: str = "", is_report: b
             "name": "Groq",
             "url": os.getenv("GROQ_API_URL", "https://api.groq.com/openai/v1/chat/completions"),
             "payload": {
-                "model": os.getenv("GROQ_MODEL", "llama-3.1-8b-instant"),
+                "model": os.getenv("GROQ_MODEL", "llama3-8b-8192"),
                 "messages": [
                     {"role": "system", "content": system_instruction or "You are a helpful research assistant."},
                     {"role": "user", "content": prompt}
@@ -68,16 +68,16 @@ def generate_llm_content(prompt: str, system_instruction: str = "", is_report: b
     hugging_face_api_key = os.getenv("HUGGINGFACE_API_KEY")
     if hugging_face_api_key and (provider is None or provider == "huggingface"):
         # List of Hugging Face models to try in order of preference
-        # Using models that work with the router endpoint
-        huggingface_models = os.getenv("HUGGINGFACE_MODELS", "gpt2,microsoft/DialoGPT-medium").split(",")
+        # Using models that work with the inference API
+        huggingface_models = os.getenv("HUGGINGFACE_MODELS", "meta-llama/Meta-Llama-3-8B-Instruct,mistralai/Mistral-7B-v0.1").split(",")
         
         # Try each model in order until one works
         for model_id in huggingface_models:
             providers.append({
                 "name": f"Hugging Face ({model_id})",
-                "url": f"https://router.huggingface.co/models/{model_id}",
+                "url": f"https://api-inference.huggingface.co/models/{model_id}",
                 "payload": {
-                    "inputs": f"Generate a short response to: {prompt}",
+                    "inputs": f"<s>[INST] {system_instruction + ' ' if system_instruction else ''}{prompt} [/INST]",
                     "parameters": {
                         "max_new_tokens": 200 if not is_report else 500,
                         "temperature": 0.7
