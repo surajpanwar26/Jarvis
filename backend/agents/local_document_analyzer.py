@@ -21,17 +21,39 @@ class LocalDocumentAnalyzerAgent(BaseAgent):
         if not file_base64:
             raise Exception("No document content provided")
         
-        # Analyze document locally
-        analysis_result = self._analyze_document_locally(file_base64, mime_type)
-        
-        logger.info(f"[{self.name}] Local document analysis completed")
-        
-        # Update state
-        state["report"] = analysis_result
-        state["sources"] = [{"title": "Uploaded Document", "uri": "#local-file"}]
-        state["images"] = []
-        
-        return state
+        try:
+            # Analyze document locally
+            analysis_result = self._analyze_document_locally(file_base64, mime_type)
+            
+            logger.info(f"[{self.name}] Local document analysis completed")
+            
+            # Update state
+            state["report"] = analysis_result
+            state["sources"] = [{"title": "Uploaded Document", "uri": "#local-file"}]
+            state["images"] = []
+            
+            return state
+        except Exception as e:
+            logger.error(f"[{self.name}] Local document analysis failed: {str(e)}")
+            # Provide a minimal fallback report even if local analysis fails
+            state["report"] = f"""# Document Analysis Report
+
+## Analysis Method
+This document was processed using local analysis techniques without external APIs.
+
+## Status
+Local analysis encountered an error: {str(e)}
+
+## Suggestions
+1. Try uploading a different document format
+2. Ensure the document is not corrupted
+3. For PDF files, try converting to text format first
+4. For very large documents, try breaking into smaller sections
+
+We're committed to providing analysis capabilities even when external services are unavailable."""
+            state["sources"] = [{"title": "Local Analysis", "uri": "#local-file"}]
+            state["images"] = []
+            return state
     
     def _analyze_document_locally(self, file_base64: str, mime_type: str) -> str:
         """Analyze document locally using open-source libraries"""
@@ -57,6 +79,7 @@ class LocalDocumentAnalyzerAgent(BaseAgent):
             
         except Exception as e:
             logger.error(f"[{self.name}] Local document analysis failed: {str(e)}")
+            # Re-raise to be handled by the caller
             raise Exception(f"Local document analysis failed: {str(e)}")
     
     def _extract_text(self, file_bytes: bytes, mime_type: str) -> str:
@@ -69,18 +92,40 @@ class LocalDocumentAnalyzerAgent(BaseAgent):
                     with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
                         text = ""
                         for page in pdf.pages:
-                            text += page.extract_text() or ""
+                            page_text = page.extract_text()
+                            if page_text:
+                                text += page_text + "\n"
                         return text
                 except ImportError:
+                    logger.warning(f"[{self.name}] pdfplumber not available, trying PyPDF2")
                     # Fallback to PyPDF2 if pdfplumber is not available
                     try:
                         import PyPDF2
                         pdf_reader = PyPDF2.PdfReader(io.BytesIO(file_bytes))
                         text = ""
                         for page in pdf_reader.pages:
-                            text += page.extract_text()
+                            page_text = page.extract_text()
+                            if page_text:
+                                text += page_text + "\n"
                         return text
                     except ImportError:
+                        logger.warning(f"[{self.name}] PyPDF2 not available, falling back to text decoding")
+                        # Final fallback - decode as text
+                        return file_bytes.decode('utf-8', errors='ignore')
+                except Exception as e:
+                    logger.warning(f"[{self.name}] PDF extraction failed with pdfplumber: {str(e)}, trying PyPDF2")
+                    # Try PyPDF2 as fallback
+                    try:
+                        import PyPDF2
+                        pdf_reader = PyPDF2.PdfReader(io.BytesIO(file_bytes))
+                        text = ""
+                        for page in pdf_reader.pages:
+                            page_text = page.extract_text()
+                            if page_text:
+                                text += page_text + "\n"
+                        return text
+                    except Exception as e2:
+                        logger.warning(f"[{self.name}] PDF extraction failed with PyPDF2: {str(e2)}, falling back to text decoding")
                         # Final fallback - decode as text
                         return file_bytes.decode('utf-8', errors='ignore')
             
@@ -95,6 +140,11 @@ class LocalDocumentAnalyzerAgent(BaseAgent):
                         text += paragraph.text + "\n"
                     return text
                 except ImportError:
+                    logger.warning(f"[{self.name}] python-docx not available, falling back to text decoding")
+                    # Fallback - decode as text
+                    return file_bytes.decode('utf-8', errors='ignore')
+                except Exception as e:
+                    logger.warning(f"[{self.name}] Word document extraction failed: {str(e)}, falling back to text decoding")
                     # Fallback - decode as text
                     return file_bytes.decode('utf-8', errors='ignore')
             
@@ -104,6 +154,7 @@ class LocalDocumentAnalyzerAgent(BaseAgent):
             
             else:
                 # For other file types, try to decode as text
+                logger.info(f"[{self.name}] Unknown MIME type {mime_type}, attempting text decoding")
                 return file_bytes.decode('utf-8', errors='ignore')
                 
         except Exception as e:
@@ -207,7 +258,7 @@ The document has been successfully analyzed using local processing techniques. T
         # Extract potential names (capitalized words)
         names = re.findall(r'\b[A-Z][a-z]+(?:\s[A-Z][a-z]+)*\b', text)
         # Filter out common words
-        common_words = {'The', 'This', 'That', 'These', 'Those', 'With', 'From', 'Into', 'Over', 'Under', 'About', 'After', 'Before'}
+        common_words = {'The', 'This', 'That', 'These', 'Those', 'With', 'From', 'They', 'Will', 'Would', 'There', 'What', 'When', 'Where', 'Which', 'While', 'These', 'Those', 'Than', 'Been', 'Were', 'Could', 'Should', 'Might', 'Must', 'About', 'After', 'Before', 'Under'}
         entities.extend([name for name in names if name not in common_words and len(name) > 2])
         
         # Extract potential numbers/dates

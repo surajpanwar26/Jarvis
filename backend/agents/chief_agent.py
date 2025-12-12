@@ -39,6 +39,8 @@ class ChiefAgent(BaseAgent):
                 try:
                     # First try: Enhanced LLM-based document analyzer with fallback support
                     state = await self.document_analyzer.execute(state)
+                    # If we get here, the analysis was successful (even if it used fallback)
+                    logger.info(f"[{self.name}] Document analysis completed successfully")
                 except Exception as llm_error:
                     logger.warning(f"[{self.name}] LLM document analysis failed: {str(llm_error)}")
                     try:

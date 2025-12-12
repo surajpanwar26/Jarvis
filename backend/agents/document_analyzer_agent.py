@@ -26,9 +26,10 @@ class DocumentAnalyzerAgent(BaseAgent):
         try:
             analysis_result = self._analyze_document_with_llm(file_base64, mime_type)
             
-            # Check if we got a fallback response and treat it as a failure to trigger local fallback
+            # Check if we got a fallback response and treat it as a valid response
+            # but log that we're using fallback content
             if analysis_result.get("provider") == "Fallback":
-                raise Exception("LLM providers failed, need to fall back to local analysis")
+                logger.warning(f"[{self.name}] Using fallback response due to LLM failures")
             
             logger.info(f"[{self.name}] Document analysis completed using {analysis_result.get('provider', 'Unknown')}")
             
@@ -40,6 +41,7 @@ class DocumentAnalyzerAgent(BaseAgent):
             return state
         except Exception as e:
             logger.error(f"[{self.name}] Document analysis failed: {str(e)}")
+            # Re-raise to trigger the next fallback in the chain
             raise Exception(f"Document analysis failed: {str(e)}")
     
     def _analyze_document_with_llm(self, file_base64: str, mime_type: str) -> Dict[str, Any]:
