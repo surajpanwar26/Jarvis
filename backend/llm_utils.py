@@ -180,14 +180,24 @@ def generate_llm_content(prompt: str, system_instruction: str = "", is_report: b
     # If we get here, all providers failed - return a simple fallback response
     logger.warning(f"All LLM providers failed. Last error: {str(last_error)}. Returning fallback response.")
     attempted_providers_str = ", ".join(attempted_providers) if attempted_providers else "None"
-    fallback_content = f"""I apologize, but I'm unable to generate a detailed response at the moment due to API limitations. Here's a brief overview based on general knowledge:
+    
+    # Even if API keys are missing, provide a basic response
+    topic_summary = prompt.split(':')[0] if ':' in prompt else prompt[:50] + '...' if len(prompt) > 50 else prompt
+    
+    fallback_content = f"""I apologize, but I'm unable to generate a detailed AI-powered response at the moment due to API limitations. Here's a basic overview:
 
-**Topic**: {prompt.split(':')[0] if ':' in prompt else prompt[:50] + '...' if len(prompt) > 50 else prompt}
+**Topic**: {topic_summary}
 
-This is a fallback response because all configured AI providers are currently unavailable or experiencing issues:
-- Attempted providers: {attempted_providers_str}
-- Last error: {str(last_error)[:100] if last_error else 'Unknown'}
+Possible reasons for this limitation:
+- API keys may not be properly configured
+- Network connectivity issues
+- API rate limiting
 
-Please check your API keys and network connectivity, or try again later."""
+To resolve this issue:
+1. Ensure all required API keys are set in your environment variables
+2. Check your internet connection
+3. Try again later if it's a temporary rate limit
+
+For administrators: Check that GOOGLE_API_KEY, GROQ_API_KEY, and other required keys are properly configured in your deployment environment."""
 
     return {"content": fallback_content, "provider": "Fallback", "attempted_providers": attempted_providers}

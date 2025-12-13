@@ -18,7 +18,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     // @ts-ignore: ImportMeta.env is not properly typed in TypeScript
     const apiUrl = import.meta.env?.VITE_API_URL || `http://localhost:${import.meta.env?.PORT || 8002}`;
     const popup = window.open(
-      `${apiUrl}/api/auth/login`,
+      `${apiUrl}/api/auth/google`,
       'Google Login',
       `width=${width},height=${height},top=${top},left=${left}`
     );

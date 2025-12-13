@@ -227,13 +227,14 @@ class ResearcherAgent(BaseAgent):
     def _perform_google_search(self, query: str) -> Dict[str, Any]:
         """Fallback search using Google Search via Gemini API directly"""
         try:
-            # Skip Google search if API key is reported as leaked
+            # Handle missing Google API key gracefully
             google_api_key = os.getenv("GOOGLE_API_KEY")
-            if not google_api_key:
-                raise Exception("Google API key not configured for fallback search")
             
             # Return a simple fallback response instead of calling the API
-            content = f"Google search is temporarily unavailable for '{query}'. This is a fallback response."
+            if not google_api_key:
+                content = f"Google search is temporarily unavailable for '{query}' due to missing API configuration. This is a fallback response."
+            else:
+                content = f"Google search is temporarily unavailable for '{query}'. This is a fallback response."
             
             # Return in the same format as Tavily
             return {

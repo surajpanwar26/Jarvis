@@ -19,7 +19,9 @@ class AIAssistantAgent(BaseAgent):
         logger.info(f"[{self.name}] Answering question: {question}")
         
         if not self.google_api_key:
-            raise Exception("GOOGLE_API_KEY not configured")
+            logger.warning("GOOGLE_API_KEY not configured, returning fallback response")
+            state["answer"] = f"I apologize, but I'm unable to provide an AI-powered answer at the moment because the required API key (GOOGLE_API_KEY) is not configured. Please contact the administrator to set up the necessary API keys for full functionality."
+            return state
         
         if not question:
             logger.warning(f"[{self.name}] No question provided")

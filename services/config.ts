@@ -73,6 +73,11 @@ export const getApiBaseUrl = (): string => {
     return `http://localhost:${process.env.PORT || 8002}`;
   }
   
+  // For production, use the Render backend URL
+  if (typeof window !== 'undefined' && window.location.hostname.includes('onrender.com')) {
+    return 'https://jarvis-backend-nzcg.onrender.com';
+  }
+  
   // For production, use a more appropriate default
   console.warn("No API URL configured, using localhost as fallback");
   return `http://localhost:${process.env.PORT || 8002}`;
