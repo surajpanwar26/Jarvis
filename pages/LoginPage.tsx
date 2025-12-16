@@ -1,6 +1,7 @@
 import React from 'react';
 import { JarvisLogo } from '../components/Logo';
 import { GoogleIcon } from '../components/Icons';
+import { getApiBaseUrl } from '../services/config';
 
 interface LoginPageProps {
   onLogin: () => void;
@@ -14,9 +15,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     const left = window.screen.width / 2 - width / 2;
     const top = window.screen.height / 2 - height / 2;
     
-    // Use environment variable for API URL with fallback to localhost
-    // @ts-ignore: ImportMeta.env is not properly typed in TypeScript
-    const apiUrl = import.meta.env?.VITE_API_URL || `http://localhost:${import.meta.env?.PORT || 8002}`;
+    // Use the proper API URL configuration
+    const apiUrl = getApiBaseUrl();
     const popup = window.open(
       `${apiUrl}/api/auth/google`,
       'Google Login',
