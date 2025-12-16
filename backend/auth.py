@@ -59,68 +59,28 @@ if MONGODB_URI:
                 username = parsed_uri.username
                 password = parsed_uri.password
                 
-                # Reconstruct URI with encoded credentials
+                # Only encode if both username and password exist
                 if username and password:
+                    # Encode username and password
                     encoded_username = urllib.parse.quote_plus(username)
                     encoded_password = urllib.parse.quote_plus(password)
-                    new_netloc = f"{encoded_username}:{encoded_password}@{parsed_uri.hostname}"
-                    if parsed_uri.port:
-                        new_netloc += f":{parsed_uri.port}"
-                    encoded_uri = urllib.parse.urlunparse((
-                        parsed_uri.scheme,
-                        new_netloc,
-                        parsed_uri.path,
-                        parsed_uri.params,
-                        parsed_uri.query,
-                        parsed_uri.fragment
-                    ))
                     
+                    # Reconstruct URI with encoded credentials
+                    encoded_uri = MONGODB_URI.replace(
+                        f"{username}:{password}",
+                        f"{encoded_username}:{encoded_password}"
+                    )
             except Exception as e:
-                print(f"Failed to encode MongoDB URI: {e}")
-                encoded_uri = MONGODB_URI
+                print(f"Error encoding MongoDB credentials: {e}")
         
-        # Check if SSL is disabled in the URI
-        use_ssl = "ssl=false" not in MONGODB_URI.lower()
-        
-        if use_ssl:
-            mongo_client = MongoClient(
-                encoded_uri,
-                serverSelectionTimeoutMS=10000,
-                connectTimeoutMS=20000,
-                socketTimeoutMS=20000,
-                maxPoolSize=50,
-                minPoolSize=5,
-                tls=True,
-                tlsAllowInvalidCertificates=True,
-                tlsAllowInvalidHostnames=True
-            )
-        else:
-            mongo_client = MongoClient(
-                encoded_uri,
-                serverSelectionTimeoutMS=10000,
-                connectTimeoutMS=20000,
-                socketTimeoutMS=20000,
-                maxPoolSize=50,
-                minPoolSize=5
-            )
-        # Test the connection
-        mongo_client.admin.command('ping')
-        db = mongo_client["jarvis_database"]
-        users_collection = db["users"]
-        
-        # Create indexes for better performance (align with existing schema)
-        users_collection.create_index("userId", unique=True)
-        users_collection.create_index("lastActive")
-        
-        print("Connected to MongoDB successfully for auth module")
+        mongo_client = MongoClient(encoded_uri)
+        db = mongo_client.jarvis_db
+        users_collection = db.users
+        print("Connected to MongoDB")
     except Exception as e:
-        print(f"Failed to connect to MongoDB for auth module: {e}")
-        mongo_client = None
-else:
-    print("MONGODB_URI not found in environment variables for auth module")
+        print(f"Failed to connect to MongoDB: {e}")
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
-    """Create JWT access token"""
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
@@ -131,12 +91,9 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     return encoded_jwt
 
 def generate_user_id(email: str) -> str:
-    """Generate a unique user ID based on email"""
-    # Create a hash of the email to generate a unique user ID
-    email_hash = hashlib.md5(email.lower().encode()).hexdigest()[:8]
-    return f"user_{email_hash}"
+    """Generate a consistent user ID based on email"""
+    return hashlib.sha256(email.lower().encode()).hexdigest()
 
-# Add another alias route to handle the /api/auth/google path that might be used
 @router.get("/google")
 async def login_via_google_alias(request: Request):
     """Alias for Google OAuth login to handle /api/auth/google path"""
@@ -177,6 +134,8 @@ async def login_via_google(request: Request):
         # Validate that the redirect URI matches expected format for the environment
         if is_production and not redirect_uri.startswith("https://jarvis-backend-nzcg.onrender.com"):
             print(f"WARNING: Production redirect URI mismatch! Got: {redirect_uri}")
+            # Override with correct production URI to prevent issues
+            redirect_uri = "https://jarvis-backend-nzcg.onrender.com/api/auth/google/callback"
         elif not is_production and not redirect_uri.startswith("http://localhost"):
             print(f"WARNING: Development redirect URI mismatch! Got: {redirect_uri}")
     

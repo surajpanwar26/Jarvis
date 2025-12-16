@@ -74,7 +74,10 @@ export const getApiBaseUrl = (): string => {
   }
   
   // For production, use the Render backend URL
-  if (typeof window !== 'undefined' && window.location.hostname.includes('onrender.com')) {
+  // Check for both the backend and frontend domains
+  if (typeof window !== 'undefined' && 
+      (window.location.hostname.includes('onrender.com') || 
+       window.location.hostname.includes('jarvis'))) {
     return 'https://jarvis-backend-nzcg.onrender.com';
   }
   

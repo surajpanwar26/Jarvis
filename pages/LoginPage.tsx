@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { JarvisLogo } from '../components/Logo';
 import { GoogleIcon } from '../components/Icons';
 import { getApiBaseUrl } from '../services/config';
@@ -8,6 +8,26 @@ interface LoginPageProps {
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
+  useEffect(() => {
+    // Listen for OAuth success message from popup
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data.type === 'oauth-success' && event.data.token) {
+        // Store the token in localStorage
+        localStorage.setItem('authToken', event.data.token);
+        // Notify the app that login was successful
+        onLogin();
+      }
+    };
+
+    // Add event listener
+    window.addEventListener('message', handleMessage);
+
+    // Clean up event listener on component unmount
+    return () => {
+      window.removeEventListener('message', handleMessage);
+    };
+  }, [onLogin]);
+
   const handleGoogleLogin = () => {
     // Open OAuth in a popup window instead of redirecting
     const width = 600;
